@@ -1,0 +1,55 @@
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.uv/
+
+# ─── Packaging ────────────────────────────────────────────────────────────────
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ─── Testing ─────────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ─── Linting / Type Checking ─────────────────────────────────────────────────
+.ruff_cache/
+.mypy_cache/
+
+# ─── Environment ─────────────────────────────────────────────────────────────
+.env
+secrets/
+
+# ─── Data (not tracked in git) ────────────────────────────────────────────────
+data/uploads/
+data/ocr_cache/
+data/chroma/
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# ─── OS / Editor ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+
+# ─── Next.js (apps/web) ───────────────────────────────────────────────────────
+apps/web/.next/
+apps/web/node_modules/
+apps/web/.env.local
