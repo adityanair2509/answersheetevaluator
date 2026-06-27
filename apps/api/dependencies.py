@@ -14,25 +14,29 @@ Usage in route handlers::
 """
 from __future__ import annotations
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from fastapi import Depends, Header, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.common.config import Settings, get_settings
 
 # ---------------------------------------------------------------------------
-# Database session
-# NOTE: Full async DB session injection is wired in Day 3 when SQLAlchemy +
-# Alembic are set up. The placeholder below keeps the import graph intact.
+# Database session — wired in Day 3 via db.session
 # ---------------------------------------------------------------------------
 
 
-async def get_db() -> AsyncIterator[None]:  # type: ignore[misc]
+async def get_db() -> AsyncIterator[AsyncSession]:
     """
-    Yield an async DB session.
-    TODO (Day 3): Replace with AsyncSession from db.session.
+    Yield an async SQLAlchemy session scoped to a single request.
+
+    The session is committed on success and rolled back on any unhandled error.
+    Delegates to db.session.get_db() so engine config lives in one place.
     """
-    yield None  # placeholder
+    from db.session import get_db as _session_get_db
+
+    async for session in _session_get_db():
+        yield session
 
 
 # ---------------------------------------------------------------------------

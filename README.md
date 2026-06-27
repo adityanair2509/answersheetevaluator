@@ -197,7 +197,7 @@ exams ──────────────────── questions
 processing_jobs  ← pipeline status tracking
 audit_logs       ← full action history
 students         ← optional student roster
-```
+```\n## 🧱 Day 3 – ORM Layer Overview\n\n**What was done today**\n- Implemented a full async SQLAlchemy 2 ORM with **12 tables** covering exams, questions, answer keys, student sheets, OCR pages, extracted answers, processing jobs, evaluation results, confidence flags, and teacher overrides.\n- Added Alembic migration `0001_initial_schema` and applied it to the SQLite database.\n- Created a **seed script** (`scripts/seed_db.py`) that populates a minimal development dataset (1 exam, 3 questions, 3 students, 3 answer sheets).\n- Wrote unit tests (`tests/unit/test_models.py`) confirming imports, table count, and foreign‑key integrity (now 9 tests pass).\n- Updated `AGENTS.md` and the README progress table to mark Day 3 as **DONE**.\n\n**How the ORM layers fit together**\n````\nexams ── questions\n   │        │\n   ├─ answer_keys ── answer_key_chunks   (RAG vectors)\n   │\n   └─ answer_sheets ── sheet_pages\n               │\n               └─ extracted_answers (OCR output)\n                     │\n                     └─ evaluation_results\n                               │\n                               ├─ confidence_flags\n                               └─ teacher_overrides\nprocessing_jobs  ← pipeline status tracking\naudit_logs       ← full action history\nstudents         ← optional student roster\n````\n\n- **Exam** is the root entity. It owns **questions**, an optional **answer key**, and many **answer sheets**.\n- **AnswerKey** is split into **chunks** for vector search (RAG).\n- **AnswerSheet** belongs to a student (optional) and contains multiple **pages** (images). Each page yields **extracted answers** via OCR.\n- Each **ExtractedAnswer** receives an **EvaluationResult** from the LLM. The result can generate **confidence flags** that trigger human review, and a **teacher override** records any manual correction.\n- **ProcessingJob** tracks the background pipeline that runs OCR → RAG → LLM for a sheet.\n\nThese tables provide a clean, normalized schema that supports the end‑to‑end grading pipeline while remaining easy to extend for future features (e.g., analytics, audit logs).
 
 ---
 
@@ -264,7 +264,7 @@ Final Confidence = f(OCR confidence × Retrieval score × LLM confidence × Rubr
 | Day | Status | What |
 |-----|--------|------|
 | Day 1–2 | ✅ **DONE** | Project skeleton, config, logging, schemas, FastAPI app, 6 tests |
-| Day 3 | ⬜ Next | SQLAlchemy ORM (12 tables), Alembic migrations, seed data |
+| Day 3 | ✅ **DONE** | SQLAlchemy ORM (12 tables), Alembic migrations, seed data, 9 tests |
 | Day 4–5 | ⬜ Pending | OCR pipeline — OpenCV preprocessing, Google Vision wrapper, segmentation |
 | Day 6–7 | ⬜ Pending | API routers (sheets, exams), background job runner, integration tests |
 

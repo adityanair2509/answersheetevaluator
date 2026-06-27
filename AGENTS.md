@@ -7,36 +7,45 @@ The repo is a **live Python monorepo** with a running FastAPI backend. It is no 
 ### What exists
 ```
 answersheetevaluator/
-├── pyproject.toml          ← uv project; all deps declared (ocr/rag/llm/dev groups)
-├── uv.lock                 ← 139 packages locked (DO NOT delete)
-├── .venv/                  ← virtualenv installed by uv (do not commit)
-├── .env.example            ← template; copy to .env before running
-├── Makefile                ← canonical task runner (see commands below)
-├── README.md               ← architecture overview + quickstart
+├── pyproject.toml          <- uv project; all deps declared (ocr/rag/llm/dev groups)
+├── uv.lock                 <- 139 packages locked (DO NOT delete)
+├── .venv/                  <- virtualenv installed by uv (do not commit)
+├── .env.example            <- template; copy to .env before running
+├── Makefile                <- canonical task runner (see commands below)
+├── README.md               <- architecture overview + quickstart
+├── alembic.ini             <- Alembic config (sqlalchemy.url = sqlite+aiosqlite)
+├── alembic/
+│   ├── env.py              <- async-compatible Alembic env (imports Base.metadata)
+│   └── versions/           <- migration scripts (0001_initial_schema)
 ├── apps/api/
-│   ├── main.py             ← FastAPI app (CORS, lifespan, /health, schema previews)
-│   └── dependencies.py     ← get_db() placeholder + get_verified_teacher()
+│   ├── main.py             <- FastAPI app (CORS, lifespan, /health, schema previews)
+│   └── dependencies.py     <- get_db() -> AsyncSession + get_verified_teacher()
 ├── packages/common/
-│   ├── config.py           ← Pydantic Settings singleton (get_settings())
-│   ├── logging.py          ← structlog configure_logging() + get_logger()
-│   ├── enums.py            ← all StrEnums: JobStatus, SheetStatus, ReviewStatus, etc.
-│   └── schemas.py          ← all Pydantic v2 request/response models
+│   ├── config.py           <- Pydantic Settings singleton (get_settings())
+│   ├── logging.py          <- structlog configure_logging() + get_logger()
+│   ├── enums.py            <- all StrEnums: JobStatus, SheetStatus, ReviewStatus, etc.
+│   └── schemas.py          <- all Pydantic v2 request/response models
 ├── packages/{ocr,rag,llm,evaluation,cleaning,concepts,review}/
-│   └── __init__.py         ← stubs only; implementation starts Day 3+
-├── db/                     ← empty; ORM models + Alembic coming in Day 3
-├── data/                   ← runtime data dir (git-ignored); created on first run
+│   └── __init__.py         <- stubs only; implementation starts Day 4+
+├── db/
+│   ├── base.py             <- DeclarativeBase shared by all models + Alembic
+│   ├── models.py           <- 12 ORM models (SQLAlchemy 2 Mapped[] syntax)
+│   └── session.py          <- async engine, AsyncSessionLocal, get_db(), create_all_tables()
+├── data/                   <- runtime data dir (git-ignored); evaluator.db lives here
+├── scripts/
+│   └── seed_db.py          <- idempotent dev seed (1 exam, 3 questions, 3 students, 3 sheets)
 ├── tests/
-│   ├── conftest.py         ← session-scoped TestClient fixture
-│   ├── unit/test_config.py ← 3 tests (settings, teacher IDs, dev flag)
-│   └── unit/test_health.py ← 3 tests (/health, /api/v1/teachers, headers)
-└── scripts/                ← CLI utilities placeholder
+│   ├── conftest.py         <- session-scoped TestClient fixture
+│   ├── unit/test_config.py <- 3 tests (settings, teacher IDs, dev flag)
+│   ├── unit/test_health.py <- 3 tests (/health, /api/v1/teachers, headers)
+│   └── unit/test_models.py <- 3 tests (ORM imports, table count, FK checks)
+└── docs/                   <- architecture docs, implementation plan
 ```
 
 ### What does NOT exist yet
-- `db/models.py` — SQLAlchemy ORM (Day 3)
-- `packages/ocr/*` implementation (Day 4–5)
-- `apps/api/routers/` — sheets.py, exams.py (Day 6–7)
-- `apps/web/` — Next.js dashboard (Week 4)
+- `packages/ocr/*` implementation (Day 4-5)
+- `apps/api/routers/` -- sheets.py, exams.py (Day 6-7)
+- `apps/web/` -- Next.js dashboard (Week 4)
 - Any real data, migrations, or seed fixtures
 
 ## Canonical Commands
