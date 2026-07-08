@@ -1,6 +1,6 @@
 # Agent Instructions
 
-## Repo Shape (as of Week 1 Day 1–2 completion)
+## Repo Shape (as of Week 1 Day 4–5 completion)
 
 The repo is a **live Python monorepo** with a running FastAPI backend. It is no longer empty.
 
@@ -25,28 +25,38 @@ answersheetevaluator/
 │   ├── logging.py          <- structlog configure_logging() + get_logger()
 │   ├── enums.py            <- all StrEnums: JobStatus, SheetStatus, ReviewStatus, etc.
 │   └── schemas.py          <- all Pydantic v2 request/response models
-├── packages/{ocr,rag,llm,evaluation,cleaning,concepts,review}/
-│   └── __init__.py         <- stubs only; implementation starts Day 4+
+├── packages/ocr/
+│   ├── __init__.py         <- package public exports
+│   ├── types.py            <- OCR internal dataclasses
+│   ├── preprocess.py       <- OpenCV image deskew, denoise, binarize, and border-cropping
+│   ├── vision_client.py    <- Google Vision Client (SDK) + REST Client (API key) + Mock fallback
+│   ├── segment.py          <- regex-based answer block question segmentation
+│   └── pipeline.py         <- orchestrates preprocess -> OCR -> segmentation
+├── packages/{rag,llm,evaluation,cleaning,concepts,review}/
+│   └── __init__.py         <- stubs only; implementation starts Day 6+
 ├── db/
 │   ├── base.py             <- DeclarativeBase shared by all models + Alembic
 │   ├── models.py           <- 12 ORM models (SQLAlchemy 2 Mapped[] syntax)
 │   └── session.py          <- async engine, AsyncSessionLocal, get_db(), create_all_tables()
 ├── data/                   <- runtime data dir (git-ignored); evaluator.db lives here
 ├── scripts/
-│   └── seed_db.py          <- idempotent dev seed (1 exam, 3 questions, 3 students, 3 sheets)
+│   ├── seed_db.py          <- idempotent dev seed (1 exam, 3 questions, 3 students, 3 sheets)
+│   ├── test_ocr_real.py    <- test script for running OCR with a generated sheet
+│   └── check_api_key.py    <- script to verify Google Vision API key and billing status
 ├── tests/
 │   ├── conftest.py         <- session-scoped TestClient fixture
 │   ├── unit/test_config.py <- 3 tests (settings, teacher IDs, dev flag)
 │   ├── unit/test_health.py <- 3 tests (/health, /api/v1/teachers, headers)
-│   └── unit/test_models.py <- 3 tests (ORM imports, table count, FK checks)
+│   ├── unit/test_models.py <- 3 tests (ORM imports, table count, FK checks)
+│   ├── unit/test_preprocess.py <- 3 tests (binarization, cropping, loading error)
+│   └── unit/test_ocr_pipeline.py <- 15 tests (mock client, segmentation patterns, pipeline)
 └── docs/                   <- architecture docs, implementation plan
 ```
 
 ### What does NOT exist yet
-- `packages/ocr/*` implementation (Day 4-5)
 - `apps/api/routers/` -- sheets.py, exams.py (Day 6-7)
 - `apps/web/` -- Next.js dashboard (Week 4)
-- Any real data, migrations, or seed fixtures
+- Any real RAG, LLM scorer, or evaluation routing packages
 
 ## Canonical Commands
 
@@ -76,10 +86,11 @@ uv run ruff format apps/ packages/ tests/
 
 ## Current Architecture
 
-- **Stack:** Python 3.11+, FastAPI 0.138, Pydantic v2, pydantic-settings 2.14, structlog, SQLAlchemy 2 + Alembic, aiosqlite, ChromaDB, sentence-transformers, litellm, OpenCV, Google Vision API (optional)
+- **Stack:** Python 3.11+, FastAPI 0.138, Pydantic v2, pydantic-settings 2.14, structlog, SQLAlchemy 2 + Alembic, aiosqlite, ChromaDB, sentence-transformers, litellm, OpenCV, Google Vision API (REST/SDK)
 - **Frontend:** Next.js (React) in `apps/web/` — **not yet scaffolded**, planned for Week 4
 - **Auth:** Header-based teacher allowlist via `X-Teacher-Id` + `ALLOWED_TEACHER_IDS` env var (no OAuth)
-- **DB:** SQLite (`data/evaluator.db`) via async SQLAlchemy — ORM models pending Day 3
+- **DB:** SQLite (`data/evaluator.db`) via async SQLAlchemy
+- **OCR Client:** Support for both service account credential files (`GOOGLE_APPLICATION_CREDENTIALS`) and plain REST API keys (`GOOGLE_VISION_API_KEY`), with fallback to `MockVisionClient` in dev.
 
 ## Critical Gotchas
 
@@ -97,12 +108,12 @@ uv run ruff format apps/ packages/ tests/
 - **Read `packages/common/schemas.py`** before adding new API routes — all request/response shapes are already defined there.
 - **Read `packages/common/enums.py`** before using status strings — all enums are `StrEnum` and safe to use as string values.
 - **Do not import `settings` at module level in packages/** — always call `get_settings()` inside functions to avoid circular imports during tests.
-- Re-check `AGENTS.md`, `docs/implementation_plan.md`, and `README.md` before starting any new day's tasks.
+- Re-check `AGENTS.md`, `docs/plan.md`, and `README.md` before starting any new day's tasks.
 
 ## Verification
 
 After any code change:
 1. `uv run python -c "from apps.api.main import app; print('OK:', len(app.routes))"` — confirms the app loads
-2. `uv run pytest tests/unit/ -q --tb=short` — confirms 6 tests pass
+2. `uv run pytest tests/unit/ -q --tb=short` — confirms 27 tests pass
 3. Hit `http://localhost:8000/health` — confirms server responds
 

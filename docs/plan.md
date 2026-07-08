@@ -9,8 +9,8 @@
 | Week | Day | Status | What was built |
 |------|-----|--------|----------------|
 | **Week 1** | Day 1–2 | ✅ **DONE** | Project skeleton — `pyproject.toml` (uv), `.env.example`, `Makefile`, `packages/common/` (config, logging, enums, schemas), `apps/api/main.py` (FastAPI + CORS + /health), `apps/api/dependencies.py`, all package stubs, 6 unit tests passing |
-| Week 1 | Day 3 | ⬜ Next | Database layer — SQLAlchemy ORM models (12 tables), Alembic migrations, seed fixtures |
-| Week 1 | Day 4–5 | ⬜ Pending | OCR pipeline — OpenCV preprocessing, Vision API wrapper, segmentation |
+| Week 1 | Day 3 | ✅ **DONE** | Database layer — SQLAlchemy ORM (12 tables), Alembic migrations, seed fixtures, 9 tests passing |
+| Week 1 | Day 4–5 | ✅ **DONE** | OCR pipeline — `packages/ocr/` (types, preprocess, vision_client, segment, pipeline), MockVisionClient, 27 tests passing |
 | Week 1 | Day 6–7 | ⬜ Pending | API routers — sheets.py, exams.py, background jobs, integration tests |
 | Week 2 | All | ⬜ Pending | RAG — answer key ingestion, embeddings, ChromaDB, concept decomposition |
 | Week 3 | All | ⬜ Pending | LLM scoring, confidence routing, review queue |

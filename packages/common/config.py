@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     google_application_credentials: str | None = Field(
         default=None, alias="GOOGLE_APPLICATION_CREDENTIALS"
     )
+    # REST API key alternative to service-account JSON (AIzaSy…)
+    google_vision_api_key: str | None = Field(
+        default=None, alias="GOOGLE_VISION_API_KEY"
+    )
     ocr_cache_dir: Path = Path("./data/ocr_cache")
 
     # ── LLM ──────────────────────────────────────────────────────────────────

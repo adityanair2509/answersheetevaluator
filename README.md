@@ -265,7 +265,7 @@ Final Confidence = f(OCR confidence × Retrieval score × LLM confidence × Rubr
 |-----|--------|------|
 | Day 1–2 | ✅ **DONE** | Project skeleton, config, logging, schemas, FastAPI app, 6 tests |
 | Day 3 | ✅ **DONE** | SQLAlchemy ORM (12 tables), Alembic migrations, seed data, 9 tests |
-| Day 4–5 | ⬜ Pending | OCR pipeline — OpenCV preprocessing, Google Vision wrapper, segmentation |
+| Day 4–5 | ✅ **DONE** | OCR pipeline — OpenCV preprocessing, Vision REST/SDK client wrapper, segmentation, 27 tests |
 | Day 6–7 | ⬜ Pending | API routers (sheets, exams), background job runner, integration tests |
 
 ### Week 2 — Answer Key Ingestion + RAG
@@ -354,10 +354,10 @@ See [`.env.example`](.env.example) for all variables. Key ones:
 
 ## 🏃 Project Status
 
-- **Current milestone:** Week 1, Day 1–2 complete
-- **Tests passing:** 6/6
+- **Current milestone:** Week 1, Day 4–5 complete
+- **Tests passing:** 27/27
 - **API server:** Running and interactive Swagger UI available
-- **Next step:** Database layer (SQLAlchemy ORM + Alembic migrations)
+- **Next step:** API routers (sheets.py, exams.py) + background job runner (Day 6–7)
 
 ---
 
