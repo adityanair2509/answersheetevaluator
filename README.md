@@ -172,10 +172,10 @@ Open **http://localhost:8000/docs** for the interactive Swagger UI.
 ### 6. Run tests
 
 ```bash
-uv run pytest tests/unit/ -q --tb=short
+uv run pytest tests/ -q --tb=short
 ```
 
-Expected: **6 tests passing** ✅
+Expected: **45 tests passing** ✅
 
 ---
 
@@ -269,7 +269,7 @@ Final Confidence = f(OCR confidence × Retrieval score × LLM confidence × Rubr
 | Day 1–2 | ✅ **DONE** | Project skeleton, config, logging, schemas, FastAPI app, 6 tests |
 | Day 3 | ✅ **DONE** | SQLAlchemy ORM (12 tables), Alembic migrations, seed data, 9 tests |
 | Day 4–5 | ✅ **DONE** | OCR pipeline — OpenCV preprocessing, Vision REST/SDK client wrapper, segmentation, 27 tests |
-| Day 6–7 | ⬜ Pending | API routers (sheets, exams), background job runner, integration tests |
+| Day 6–7 | ✅ **DONE** | API routers (sheets, exams), background job runner, integration tests |
 
 ### Week 2 — Answer Key Ingestion + RAG
 
@@ -357,10 +357,10 @@ See [`.env.example`](.env.example) for all variables. Key ones:
 
 ## 🏃 Project Status
 
-- **Current milestone:** Week 1, Day 4–5 complete
-- **Tests passing:** 27/27
+- **Current milestone:** Week 1, Day 6–7 complete
+- **Tests passing:** 45/45
 - **API server:** Running and interactive Swagger UI available
-- **Next step:** API routers (sheets.py, exams.py) + background job runner (Day 6–7)
+- **Next step:** Week 2 — OCR cleaning + text normalization
 
 ---
 
