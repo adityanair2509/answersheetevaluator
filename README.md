@@ -9,8 +9,8 @@
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.138-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
-[![Build](https://img.shields.io/badge/Tests-6%20Passing-brightgreen?style=for-the-badge)](tests/)
-[![Week](https://img.shields.io/badge/Progress-Week%201%20Day%201--2-blue?style=for-the-badge)](#-progress)
+[![Build](https://img.shields.io/badge/Tests-45%20Passing-brightgreen?style=for-the-badge)](tests/)
+[![Week](https://img.shields.io/badge/Progress-Week%201%20Day%206--7%20✅-blue?style=for-the-badge)](#-progress)
 
 </div>
 
@@ -53,7 +53,10 @@ answersheetevaluator/
 │   ├── api/                    ← FastAPI backend (Python)
 │   │   ├── main.py             ← App entrypoint, CORS, middleware
 │   │   ├── dependencies.py     ← Auth + DB session injection
-│   │   └── routers/            ← API route modules (Week 1 Day 6-7)
+│   │   ├── jobs.py             ← Async OCR background job runner
+│   │   └── routers/            ← API route modules
+│   │       ├── exams.py        ← POST/GET exams + answer-key upload
+│   │       └── sheets.py       ← Upload sheet, get status, get answers, process
 │   └── web/                    ← Next.js dashboard (Week 4)
 │
 ├── packages/                   ← Shared Python packages

@@ -7,6 +7,7 @@ Unit tests for the full OCR pipeline:
 No real images on disk and no Google Vision API calls are made.
 All tests operate on in-memory numpy arrays or synthetic OCRBlock lists.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -76,9 +77,7 @@ def test_mock_client_returns_ocr_result() -> None:
 def test_segment_known_question_labels(text: str, expected: int | None) -> None:
     """detect_question_number must handle all supported label formats."""
     result = detect_question_number(text)
-    assert result == expected, (
-        f"For text {str(text)[:60]!r}: expected {expected}, got {result}"
-    )
+    assert result == expected, f"For text {str(text)[:60]!r}: expected {expected}, got {result}"
 
 
 # ── Test 3: Full pipeline end-to-end with MockVisionClient ───────────────────
@@ -137,12 +136,8 @@ def test_missing_question_labels_inherited() -> None:
     q2 = next(a for a in answers if a.question_number == 2)
 
     # Q1 should contain the two continuation blocks
-    assert "Continuation" in q1.raw_text, (
-        "Continuation block not merged into Q1"
-    )
-    assert "Still part" in q1.raw_text, (
-        "Second continuation block not merged into Q1"
-    )
+    assert "Continuation" in q1.raw_text, "Continuation block not merged into Q1"
+    assert "Still part" in q1.raw_text, "Second continuation block not merged into Q1"
     # Q2 should only contain its own blocks
     assert "Second sentence" in q2.raw_text
 

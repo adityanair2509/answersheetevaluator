@@ -5,6 +5,7 @@ Structured logging configuration using `structlog`.
 Call `configure_logging()` once at application startup.
 Then use `get_logger(__name__)` everywhere else.
 """
+
 from __future__ import annotations
 
 import logging

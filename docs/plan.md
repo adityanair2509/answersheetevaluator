@@ -11,7 +11,7 @@
 | **Week 1** | Day 1–2 | ✅ **DONE** | Project skeleton — `pyproject.toml` (uv), `.env.example`, `Makefile`, `packages/common/` (config, logging, enums, schemas), `apps/api/main.py` (FastAPI + CORS + /health), `apps/api/dependencies.py`, all package stubs, 6 unit tests passing |
 | Week 1 | Day 3 | ✅ **DONE** | Database layer — SQLAlchemy ORM (12 tables), Alembic migrations, seed fixtures, 9 tests passing |
 | Week 1 | Day 4–5 | ✅ **DONE** | OCR pipeline — `packages/ocr/` (types, preprocess, vision_client, segment, pipeline), MockVisionClient, 27 tests passing |
-| Week 1 | Day 6–7 | ⬜ Pending | API routers — sheets.py, exams.py, background jobs, integration tests |
+| Week 1 | Day 6–7 | ✅ **DONE** | API routers — `apps/api/routers/exams.py` (4 endpoints), `apps/api/routers/sheets.py` (4 endpoints), `apps/api/jobs.py` (async OCR background runner), 18 integration tests, 45 total tests passing |
 | Week 2 | All | ⬜ Pending | RAG — answer key ingestion, embeddings, ChromaDB, concept decomposition |
 | Week 3 | All | ⬜ Pending | LLM scoring, confidence routing, review queue |
 | Week 4 | All | ⬜ Pending | Next.js dashboard, HITL review workflow |

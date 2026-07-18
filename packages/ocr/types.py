@@ -5,6 +5,7 @@ Internal dataclasses for the OCR pipeline.
 These types flow between preprocess → vision_client → segment → pipeline.
 They are NOT Pydantic models and NOT ORM models — just lightweight Python dataclasses.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

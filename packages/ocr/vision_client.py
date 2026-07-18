@@ -9,6 +9,7 @@ Exports:
     get_ocr_client()    — factory: picks the right client based on settings
     run_ocr()           — top-level function: image → OCRResult
 """
+
 from __future__ import annotations
 
 import logging
@@ -70,8 +71,7 @@ class GoogleVisionClient(BaseOCRClient):
             from google.oauth2 import service_account  # type: ignore[import]
         except ImportError as exc:
             raise ImportError(
-                "google-cloud-vision is required. "
-                "Install it with: uv sync --all-extras"
+                "google-cloud-vision is required. Install it with: uv sync --all-extras"
             ) from exc
 
         if self._credentials_path:
@@ -79,7 +79,7 @@ class GoogleVisionClient(BaseOCRClient):
                 self._credentials_path,
                 scopes=["https://www.googleapis.com/auth/cloud-vision"],
             )
-            self._client = vision.ImageAnnotatorClient(credentials=creds)
+            self._client = vision.ImageAnnotatorClient(credentials=creds)  # type: ignore[call-arg]
         else:
             # Application Default Credentials
             self._client = vision.ImageAnnotatorClient()
@@ -93,9 +93,7 @@ class GoogleVisionClient(BaseOCRClient):
         response = client.document_text_detection(image=gv_image)
 
         if response.error.message:
-            raise RuntimeError(
-                f"Google Vision API error: {response.error.message}"
-            )
+            raise RuntimeError(f"Google Vision API error: {response.error.message}")
 
         blocks: list[OCRBlock] = []
         full_text = response.full_text_annotation.text if response.full_text_annotation else ""
@@ -123,8 +121,7 @@ class GoogleVisionClient(BaseOCRClient):
                 h = max(y_coords) - y
 
                 avg_conf = (
-                    sum(word_confidences) / len(word_confidences)
-                    if word_confidences else 1.0
+                    sum(word_confidences) / len(word_confidences) if word_confidences else 1.0
                 )
                 blocks.append(
                     OCRBlock(
@@ -138,11 +135,13 @@ class GoogleVisionClient(BaseOCRClient):
         raw: dict[str, Any] = {}
         try:
             from google.protobuf.json_format import MessageToDict  # type: ignore[import]
+
             raw = MessageToDict(response._pb)
         except Exception:  # noqa: BLE001
             raw = {"error": "could not serialise response"}
 
         return OCRResult(blocks=blocks, full_text=full_text, raw_response=raw, page=page)
+
 
 # ── Google Vision REST implementation (API key) ───────────────────────────────
 
@@ -205,9 +204,7 @@ class GoogleVisionRestClient(BaseOCRClient):
                 word_confs: list[float] = []
                 for para in block.get("paragraphs", []):
                     for word in para.get("words", []):
-                        word_text = "".join(
-                            s.get("text", "") for s in word.get("symbols", [])
-                        )
+                        word_text = "".join(s.get("text", "") for s in word.get("symbols", []))
                         words.append(word_text)
                         word_confs.append(word.get("confidence", 1.0))
 
@@ -237,8 +234,6 @@ class GoogleVisionRestClient(BaseOCRClient):
             raw_response=annotation,
             page=page,
         )
-
-
 
 
 # Default blocks returned by the mock client — covers 3 questions with
@@ -413,8 +408,7 @@ def run_ocr(image: Any, client: BaseOCRClient, page: int = 1) -> OCRResult:
         import cv2  # type: ignore[import]
     except ImportError as exc:
         raise ImportError(
-            "opencv-python is required for image encoding. "
-            "Install it with: uv sync --all-extras"
+            "opencv-python is required for image encoding. Install it with: uv sync --all-extras"
         ) from exc
 
     success, encoded = cv2.imencode(".png", image)

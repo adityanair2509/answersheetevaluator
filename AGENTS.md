@@ -23,7 +23,7 @@ answersheetevaluator/
 ├── packages/common/
 │   ├── config.py           <- Pydantic Settings singleton (get_settings())
 │   ├── logging.py          <- structlog configure_logging() + get_logger()
-│   ├── enums.py            <- all StrEnums: JobStatus, SheetStatus, ReviewStatus, etc.
+│   ├── enums.py         /   <- all StrEnums: JobStatus, SheetStatus, ReviewStatus, etc.
 │   └── schemas.py          <- all Pydantic v2 request/response models
 ├── packages/ocr/
 │   ├── __init__.py         <- package public exports

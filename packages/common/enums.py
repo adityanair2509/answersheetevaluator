@@ -3,10 +3,10 @@ packages/common/enums.py
 
 Centralised enumeration types shared across the entire application.
 """
+
 from __future__ import annotations
 
 from enum import StrEnum
-
 
 # ── Processing Jobs ──────────────────────────────────────────────────────────
 
@@ -61,9 +61,9 @@ class ReviewStatus(StrEnum):
 class ConfidenceBand(StrEnum):
     """Categorical confidence level for UI colour-coding."""
 
-    HIGH = "high"       # >= 0.85 → green, auto-approve
-    MEDIUM = "medium"   # 0.65–0.85 → yellow, optional review
-    LOW = "low"         # < 0.65 → red, mandatory review
+    HIGH = "high"  # >= 0.85 → green, auto-approve
+    MEDIUM = "medium"  # 0.65–0.85 → yellow, optional review
+    LOW = "low"  # < 0.65 → red, mandatory review
 
 
 # ── Answer Keys ───────────────────────────────────────────────────────────────

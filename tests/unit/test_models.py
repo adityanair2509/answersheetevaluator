@@ -4,8 +4,8 @@ tests/unit/test_models.py
 Unit tests for the SQLAlchemy ORM layer.
 These tests only verify imports, metadata, and FK structure — no DB connection needed.
 """
-from __future__ import annotations
 
+from __future__ import annotations
 
 # ── Test 1: All model classes importable ─────────────────────────────────────
 
@@ -29,9 +29,18 @@ def test_orm_imports() -> None:
 
     # Verify they are all distinct classes (not accidentally the same object)
     classes = [
-        AnswerKey, AnswerKeyChunk, AnswerSheet, ConfidenceFlag,
-        EvaluationResult, Exam, ExtractedAnswer, ProcessingJob,
-        Question, SheetPage, Student, TeacherOverride,
+        AnswerKey,
+        AnswerKeyChunk,
+        AnswerSheet,
+        ConfidenceFlag,
+        EvaluationResult,
+        Exam,
+        ExtractedAnswer,
+        ProcessingJob,
+        Question,
+        SheetPage,
+        Student,
+        TeacherOverride,
     ]
     assert len(set(classes)) == 12, "Expected 12 distinct ORM model classes"
 
@@ -41,8 +50,8 @@ def test_orm_imports() -> None:
 
 def test_table_count() -> None:
     """Base.metadata must contain exactly 12 registered tables."""
-    from db.base import Base
     import db.models  # noqa: F401 — triggers model registration
+    from db.base import Base
 
     tables = set(Base.metadata.tables.keys())
     expected = {
@@ -69,8 +78,8 @@ def test_table_count() -> None:
 
 def test_foreign_keys() -> None:
     """Critical FK relationships must be correctly wired in the metadata."""
-    from db.base import Base
     import db.models  # noqa: F401
+    from db.base import Base
 
     meta = Base.metadata
 
@@ -87,9 +96,7 @@ def test_foreign_keys() -> None:
     # evaluation_results.extracted_answer_id → extracted_answers.id
     eval_table = meta.tables["evaluation_results"]
     fk_targets = {fk.column.table.name for fk in eval_table.foreign_keys}
-    assert "extracted_answers" in fk_targets, (
-        "evaluation_results must have FK to extracted_answers"
-    )
+    assert "extracted_answers" in fk_targets, "evaluation_results must have FK to extracted_answers"
 
     # teacher_overrides.evaluation_result_id → evaluation_results.id
     overrides_table = meta.tables["teacher_overrides"]

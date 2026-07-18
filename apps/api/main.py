@@ -6,36 +6,33 @@ FastAPI application entrypoint.
 Usage:
     uv run uvicorn apps.api.main:app --reload --host 0.0.0.0 --port 8000
 """
+
 from __future__ import annotations
 
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from packages.common.config import get_settings
-from packages.common.logging import configure_logging, get_logger
-from packages.common.schemas import (
-    AnswerSheetOut,
-    EvaluationResultOut,
-    ExamCreate,
-    ExamOut,
-    ExtractedAnswerOut,
-    HealthResponse,
-    MessageResponse,
-    OverrideIn,
-    ProcessingJobOut,
-    ReviewQueueItemOut,
-)
 from packages.common.enums import (
     ConfidenceBand,
     ExamStatus,
     JobStatus,
     ReviewStatus,
     SheetStatus,
+)
+from packages.common.logging import configure_logging, get_logger
+from packages.common.schemas import (
+    AnswerSheetOut,
+    EvaluationResultOut,
+    ExamOut,
+    HealthResponse,
+    ProcessingJobOut,
+    ReviewQueueItemOut,
 )
 
 settings = get_settings()
@@ -52,7 +49,7 @@ logger = get_logger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application startup and shutdown hooks."""
     # Ensure data directories exist
     settings.ensure_dirs()
@@ -71,8 +68,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="Answer Sheet Evaluator API",
     description=(
-        "Automated grading pipeline: OCR → RAG retrieval → LLM scoring → "
-        "Human-in-the-loop review."
+        "Automated grading pipeline: OCR → RAG retrieval → LLM scoring → Human-in-the-loop review."
     ),
     version="0.1.0",
     docs_url="/docs",
@@ -161,8 +157,12 @@ async def list_teachers() -> list[str]:
     return settings.allowed_teacher_ids
 
 
-# ── Routers (imported here as they are implemented) ───────────────────────────
-# from apps.api.routers import sheets, exams   # uncomment in Day 6-7
+# ── Routers ───────────────────────────────────────────────────────────────────
+
+from apps.api.routers import exams, sheets  # noqa: E402
+
+app.include_router(exams.router, prefix="/api/v1")
+app.include_router(sheets.router, prefix="/api/v1")
 
 
 # ── Schema Preview Routes (Dev Only) ─────────────────────────────────────────
@@ -182,7 +182,7 @@ async def preview_exam() -> dict:
     """Returns an example ExamOut payload — for QA / docs inspection."""
     return {
         "id": 1,
-        "title": "Mid-Term Computer Science 2024",
+        "title": "Mid Term Computer Science ",
         "course_code": "CS301",
         "status": ExamStatus.ACCEPTING_UPLOADS,
         "created_at": "2024-11-01T09:00:00",
@@ -230,9 +230,24 @@ async def preview_evaluation() -> dict:
             "complexity trade-off."
         ),
         "concept_scores": [
-            {"concept": "Correct time complexity O(n log n)", "present": True, "partial_credit": 1.0, "evidence": "Student wrote O(n log n)"},
-            {"concept": "Names a divide-and-conquer algorithm", "present": True, "partial_credit": 1.0, "evidence": "Mentioned merge sort"},
-            {"concept": "Explains space complexity", "present": False, "partial_credit": 0.0, "evidence": None},
+            {
+                "concept": "Correct time complexity O(n log n)",
+                "present": True,
+                "partial_credit": 1.0,
+                "evidence": "Student wrote O(n log n)",
+            },
+            {
+                "concept": "Names a divide-and-conquer algorithm",
+                "present": True,
+                "partial_credit": 1.0,
+                "evidence": "Mentioned merge sort",
+            },
+            {
+                "concept": "Explains space complexity",
+                "present": False,
+                "partial_credit": 0.0,
+                "evidence": None,
+            },
         ],
         "confidence": 0.78,
         "confidence_band": ConfidenceBand.MEDIUM,
@@ -284,4 +299,3 @@ async def preview_processing_job() -> dict:
         "created_at": "2024-11-02T10:30:01",
         "updated_at": "2024-11-02T10:30:05",
     }
-

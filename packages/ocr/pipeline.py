@@ -13,18 +13,19 @@ Public API:
 The pipeline is synchronous — callers (Day 6-7 background job runner) are
 expected to wrap it in ``asyncio.to_thread()`` or a ThreadPoolExecutor.
 """
+
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Any
 
+from packages.common.logging import get_logger
 from packages.ocr.preprocess import preprocess_from_array, preprocess_sheet
 from packages.ocr.segment import assign_blocks_to_questions
 from packages.ocr.types import OCRResult, SegmentedAnswer
 from packages.ocr.vision_client import BaseOCRClient, MockVisionClient, run_ocr
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ── Main pipeline entry points ────────────────────────────────────────────────

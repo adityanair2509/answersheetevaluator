@@ -12,6 +12,7 @@ Usage in route handlers::
     ):
         ...
 """
+
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -46,7 +47,7 @@ async def get_db() -> AsyncIterator[AsyncSession]:
 
 def get_verified_teacher(
     x_teacher_id: str = Header(..., description="Teacher ID from the frontend allowlist"),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_settings),  # noqa: B008
 ) -> str:
     """
     Validate that the requesting teacher is in the configured allowlist.

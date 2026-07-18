@@ -15,6 +15,7 @@ Exports:
     detect_question_number(text) → int | None
     assign_blocks_to_questions(blocks, known_questions) → list[SegmentedAnswer]
 """
+
 from __future__ import annotations
 
 import re

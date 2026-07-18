@@ -4,11 +4,11 @@ packages/common/schemas.py
 Shared Pydantic v2 models used across API request/response bodies
 and inter-package data transfer. These are NOT ORM models.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -20,7 +20,6 @@ from packages.common.enums import (
     ReviewStatus,
     SheetStatus,
 )
-
 
 # ── Base ──────────────────────────────────────────────────────────────────────
 
@@ -185,3 +184,64 @@ class PaginatedResponse(APIBase):
     total: int
     page: int = 1
     page_size: int = 50
+
+
+# ── Answer Keys ───────────────────────────────────────────────────────────────
+
+
+class AnswerKeyCreate(APIBase):
+    """Payload for uploading / replacing an answer key (text body)."""
+
+    raw_text: str = Field(..., min_length=1)
+    version: int = Field(default=1, ge=1)
+
+
+class AnswerKeyOut(APIBase):
+    id: int
+    exam_id: int
+    status: AnswerKeyStatus
+    version: int
+    created_at: datetime
+
+
+# ── Sheet upload / process responses ─────────────────────────────────────────
+
+
+class SheetUploadResponse(APIBase):
+    """Returned immediately after a successful sheet upload."""
+
+    answer_sheet_id: int
+    job_id: int
+    status: JobStatus
+
+
+class ProcessResponse(APIBase):
+    """Returned when a processing job is enqueued or re-enqueued."""
+
+    job_id: int
+    status: JobStatus
+    message: str
+
+
+# ── Sheet detail (includes page list and latest job info) ─────────────────────
+
+
+class SheetPageOut(APIBase):
+    id: int
+    page_number: int
+    file_path: str
+
+
+class SheetDetailOut(APIBase):
+    """Extended answer sheet view with page list and job state."""
+
+    id: int
+    exam_id: int
+    student_roll: str | None
+    original_filename: str
+    status: SheetStatus
+    page_count: int
+    created_at: datetime
+    pages: list[SheetPageOut] = Field(default_factory=list)
+    job_status: JobStatus | None = None
+    extracted_answer_count: int = 0

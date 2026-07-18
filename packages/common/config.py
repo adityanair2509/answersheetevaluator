@@ -4,6 +4,7 @@ packages/common/config.py
 Centralised Pydantic Settings for the entire application.
 All values are read from environment variables (or a .env file).
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -24,7 +25,7 @@ class Settings(BaseSettings):
         extra="ignore",
         # Tell pydantic-settings to split list[str] fields on commas
         # (avoids JSON-parsing a plain "a,b,c" string which raises JSONDecodeError)
-        env_list_delimiter=",",
+        env_list_delimiter=",",  # type: ignore[typeddict-unknown-key]
     )
 
     # ── App ──────────────────────────────────────────────────────────────────
@@ -38,10 +39,8 @@ class Settings(BaseSettings):
     google_application_credentials: str | None = Field(
         default=None, alias="GOOGLE_APPLICATION_CREDENTIALS"
     )
-    # REST API key alternative to service-account JSON (AIzaSy…)
-    google_vision_api_key: str | None = Field(
-        default=None, alias="GOOGLE_VISION_API_KEY"
-    )
+    # REST API key alternative to service-account JSON
+    google_vision_api_key: str | None = Field(default=None, alias="GOOGLE_VISION_API_KEY")
     ocr_cache_dir: Path = Path("./data/ocr_cache")
 
     # ── LLM ──────────────────────────────────────────────────────────────────

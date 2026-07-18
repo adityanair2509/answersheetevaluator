@@ -1,4 +1,4 @@
-﻿"""
+"""
 scripts/seed_db.py
 
 Populate the development database with realistic fixture data.
@@ -177,7 +177,7 @@ async def seed(session: AsyncSession) -> None:
         if existing_sheet:
             print(f"  [skip] AnswerSheet for '{sheet_data['student_roll']}' already exists")
         else:
-            roll = sheet_data["student_roll"]
+            roll = str(sheet_data["student_roll"])
             sheet = AnswerSheet(
                 exam_id=exam.id,
                 student_id=student_map[roll].id,

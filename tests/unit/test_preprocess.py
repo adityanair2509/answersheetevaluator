@@ -7,6 +7,7 @@ These tests use synthetic numpy arrays generated in-memory — no real images
 on disk, no Google Vision calls, no camera required.
 opencv-python must be installed (it is in the [ocr] extras group).
 """
+
 from __future__ import annotations
 
 import pytest
@@ -43,9 +44,7 @@ def test_binarize_output_shape() -> None:
     # BGR colour input (3 channels)
     bgr = np.full((150, 250, 3), 180, dtype=np.uint8)
     result_bgr = binarize(bgr)
-    assert result_bgr.shape == (150, 250), (
-        f"Expected (150, 250), got {result_bgr.shape}"
-    )
+    assert result_bgr.shape == (150, 250), f"Expected (150, 250), got {result_bgr.shape}"
 
 
 # ── Test 3: preprocess_from_array returns a PreprocessedImage ────────────────
@@ -67,17 +66,9 @@ def test_preprocess_returns_dataclass() -> None:
 
     result = preprocess_from_array(synthetic, source_path="synthetic_test")
 
-    assert isinstance(result, PreprocessedImage), (
-        f"Expected PreprocessedImage, got {type(result)}"
-    )
-    assert result.original_shape == (400, 600), (
-        f"original_shape mismatch: {result.original_shape}"
-    )
-    assert 0.0 <= result.quality_score <= 1.0, (
-        f"quality_score out of range: {result.quality_score}"
-    )
+    assert isinstance(result, PreprocessedImage), f"Expected PreprocessedImage, got {type(result)}"
+    assert result.original_shape == (400, 600), f"original_shape mismatch: {result.original_shape}"
+    assert 0.0 <= result.quality_score <= 1.0, f"quality_score out of range: {result.quality_score}"
     assert result.source_path == "synthetic_test"
     # Processed image must still be a 2D numpy array
-    assert len(result.image.shape) == 2, (
-        "Processed image should be grayscale (2D)"
-    )
+    assert len(result.image.shape) == 2, "Processed image should be grayscale (2D)"

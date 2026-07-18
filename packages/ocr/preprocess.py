@@ -10,6 +10,7 @@ Pipeline (in order):
 All functions operate on numpy arrays (uint8).
 Requires: opencv-python, numpy (both in the [ocr] extras group).
 """
+
 from __future__ import annotations
 
 import math
@@ -27,22 +28,22 @@ from packages.ocr.types import PreprocessedImage
 def _cv2():  # type: ignore[return]
     try:
         import cv2  # type: ignore[import]
+
         return cv2
     except ImportError as exc:
         raise ImportError(
-            "opencv-python is required for OCR preprocessing. "
-            "Install it with: uv sync --all-extras"
+            "opencv-python is required for OCR preprocessing. Install it with: uv sync --all-extras"
         ) from exc
 
 
 def _np():  # type: ignore[return]
     try:
         import numpy as np  # type: ignore[import]
+
         return np
     except ImportError as exc:
         raise ImportError(
-            "numpy is required for OCR preprocessing. "
-            "Install it with: uv sync --all-extras"
+            "numpy is required for OCR preprocessing. Install it with: uv sync --all-extras"
         ) from exc
 
 
@@ -124,7 +125,9 @@ def deskew_image(image: Any) -> tuple[Any, float]:
     centre = (w // 2, h // 2)
     matrix = cv2.getRotationMatrix2D(centre, median_angle, 1.0)
     rotated = cv2.warpAffine(
-        image, matrix, (w, h),
+        image,
+        matrix,
+        (w, h),
         flags=cv2.INTER_LINEAR,
         borderMode=cv2.BORDER_REPLICATE,
     )
@@ -152,7 +155,8 @@ def binarize(image: Any) -> Any:
     gray = to_grayscale(image)
     # Adaptive threshold: block size 31, constant 10
     binary = cv2.adaptiveThreshold(
-        gray, 255,
+        gray,
+        255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
         cv2.THRESH_BINARY,
         blockSize=31,

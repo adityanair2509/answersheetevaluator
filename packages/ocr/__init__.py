@@ -30,6 +30,7 @@ from packages.ocr import (
     assign_blocks_to_questions,  # blocks → list[SegmentedAnswer]
 )
 """
+
 from __future__ import annotations
 
 from packages.ocr.pipeline import run_ocr_pipeline, run_ocr_pipeline_from_array

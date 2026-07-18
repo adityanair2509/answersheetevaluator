@@ -3,6 +3,7 @@ tests/unit/test_config.py
 
 Unit tests for packages/common/config.py
 """
+
 from __future__ import annotations
 
 import os
@@ -55,4 +56,3 @@ def test_is_development_flag() -> None:
     # Restore for other tests
     os.environ["APP_ENV"] = "development"
     get_settings.cache_clear()
-

@@ -3,6 +3,7 @@ tests/unit/test_health.py
 
 Smoke tests for the /health endpoint.
 """
+
 from __future__ import annotations
 
 
