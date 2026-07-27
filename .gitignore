@@ -33,9 +33,13 @@ secrets/
 data/uploads/
 data/ocr_cache/
 data/chroma/
+data/samples/*.png
+data/samples/*.json
 data/*.db
 data/*.db-shm
 data/*.db-wal
+*.pdf
+Downloads/
 
 # ─── OS / Editor ─────────────────────────────────────────────────────────────
 .DS_Store

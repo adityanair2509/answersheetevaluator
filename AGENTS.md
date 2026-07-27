@@ -1,14 +1,14 @@
 # Agent Instructions
 
-## Repo Shape (as of Week 1 Day 4–5 completion)
+## Repo Shape (as of Week 2 Day 1–2 completion)
 
-The repo is a **live Python monorepo** with a running FastAPI backend. It is no longer empty.
+The repo is a **live Python monorepo** with a running FastAPI backend, OCR pipeline, and text cleaning/standardization engine.
 
 ### What exists
 ```
 answersheetevaluator/
-├── pyproject.toml          <- uv project; all deps declared (ocr/rag/llm/dev groups)
-├── uv.lock                 <- 139 packages locked (DO NOT delete)
+├── pyproject.toml          <- uv project; all deps declared (ocr/rag/llm/dev groups + pymupdf)
+├── uv.lock                 <- locked dependencies (DO NOT delete)
 ├── .venv/                  <- virtualenv installed by uv (do not commit)
 ├── .env.example            <- template; copy to .env before running
 ├── Makefile                <- canonical task runner (see commands below)
@@ -19,11 +19,13 @@ answersheetevaluator/
 │   └── versions/           <- migration scripts (0001_initial_schema)
 ├── apps/api/
 │   ├── main.py             <- FastAPI app (CORS, lifespan, /health, schema previews)
-│   └── dependencies.py     <- get_db() -> AsyncSession + get_verified_teacher()
+│   ├── dependencies.py     <- get_db() -> AsyncSession + get_verified_teacher()
+│   ├── jobs.py             <- background job runner for OCR / processing
+│   └── routers/            <- exams.py, sheets.py
 ├── packages/common/
 │   ├── config.py           <- Pydantic Settings singleton (get_settings())
 │   ├── logging.py          <- structlog configure_logging() + get_logger()
-│   ├── enums.py         /   <- all StrEnums: JobStatus, SheetStatus, ReviewStatus, etc.
+│   ├── enums.py            <- all StrEnums: JobStatus, SheetStatus, ReviewStatus, etc.
 │   └── schemas.py          <- all Pydantic v2 request/response models
 ├── packages/ocr/
 │   ├── __init__.py         <- package public exports
@@ -32,8 +34,14 @@ answersheetevaluator/
 │   ├── vision_client.py    <- Google Vision Client (SDK) + REST Client (API key) + Mock fallback
 │   ├── segment.py          <- regex-based answer block question segmentation
 │   └── pipeline.py         <- orchestrates preprocess -> OCR -> segmentation
-├── packages/{rag,llm,evaluation,cleaning,concepts,review}/
-│   └── __init__.py         <- stubs only; implementation starts Day 6+
+├── packages/cleaning/
+│   ├── __init__.py         <- public exports (normalize_text, split_into_segments)
+│   ├── types.py            <- NormalizedText, QuestionSegment dataclasses
+│   ├── number_parser.py    <- regex-based question label parser
+│   ├── normalize.py        <- Unicode NFKC, invisible char removal, OCR character fixes
+│   └── question_splitter.py <- raw text to per-question segment splitter
+├── packages/{rag,llm,evaluation,concepts,review}/
+│   └── __init__.py         <- stubs only; implementation starts Week 2 Day 3+
 ├── db/
 │   ├── base.py             <- DeclarativeBase shared by all models + Alembic
 │   ├── models.py           <- 12 ORM models (SQLAlchemy 2 Mapped[] syntax)
@@ -42,6 +50,7 @@ answersheetevaluator/
 ├── scripts/
 │   ├── seed_db.py          <- idempotent dev seed (1 exam, 3 questions, 3 students, 3 sheets)
 │   ├── test_ocr_real.py    <- test script for running OCR with a generated sheet
+│   ├── test_cleaning_pipeline.py <- E2E real PDF/image OCR -> cleaning test pipeline
 │   └── check_api_key.py    <- script to verify Google Vision API key and billing status
 ├── tests/
 │   ├── conftest.py         <- session-scoped TestClient fixture
@@ -49,14 +58,14 @@ answersheetevaluator/
 │   ├── unit/test_health.py <- 3 tests (/health, /api/v1/teachers, headers)
 │   ├── unit/test_models.py <- 3 tests (ORM imports, table count, FK checks)
 │   ├── unit/test_preprocess.py <- 3 tests (binarization, cropping, loading error)
-│   └── unit/test_ocr_pipeline.py <- 15 tests (mock client, segmentation patterns, pipeline)
+│   ├── unit/test_ocr_pipeline.py <- 15 tests (mock client, segmentation patterns, pipeline)
+│   └── unit/test_normalize.py <- 41 tests (cleaning, number parser, normalizer, splitter)
 └── docs/                   <- architecture docs, implementation plan
 ```
 
 ### What does NOT exist yet
-- `apps/api/routers/` -- sheets.py, exams.py (Day 6-7)
 - `apps/web/` -- Next.js dashboard (Week 4)
-- Any real RAG, LLM scorer, or evaluation routing packages
+- Any real RAG retriever, LLM scorer, or evaluation routing packages (Week 2 Day 3+)
 
 ## Canonical Commands
 
@@ -114,6 +123,6 @@ uv run ruff format apps/ packages/ tests/
 
 After any code change:
 1. `uv run python -c "from apps.api.main import app; print('OK:', len(app.routes))"` — confirms the app loads
-2. `uv run pytest tests/unit/ -q --tb=short` — confirms 27 tests pass
+2. `uv run pytest tests/unit/ -q --tb=short` — confirms 68 tests pass
 3. Hit `http://localhost:8000/health` — confirms server responds
 

@@ -12,7 +12,8 @@
 | Week 1 | Day 3 | ✅ **DONE** | Database layer — SQLAlchemy ORM (12 tables), Alembic migrations, seed fixtures, 9 tests passing |
 | Week 1 | Day 4–5 | ✅ **DONE** | OCR pipeline — `packages/ocr/` (types, preprocess, vision_client, segment, pipeline), MockVisionClient, 27 tests passing |
 | Week 1 | Day 6–7 | ✅ **DONE** | API routers — `apps/api/routers/exams.py` (4 endpoints), `apps/api/routers/sheets.py` (4 endpoints), `apps/api/jobs.py` (async OCR background runner), 18 integration tests, 45 total tests passing |
-| Week 2 | All | ⬜ Pending | RAG — answer key ingestion, embeddings, ChromaDB, concept decomposition |
+| Week 2 | Day 1–2 | ✅ **DONE** | Answer Cleaning & Text Standardization — `packages/cleaning/` (types, number_parser, normalize, question_splitter), PyMuPDF integration (`pymupdf`), `scripts/test_cleaning_pipeline.py`, 41 new unit tests (68 total tests passing) |
+| Week 2 | Day 3–7 | ⬜ Pending | RAG — answer key ingestion, embeddings, ChromaDB, concept decomposition |
 | Week 3 | All | ⬜ Pending | LLM scoring, confidence routing, review queue |
 | Week 4 | All | ⬜ Pending | Next.js dashboard, HITL review workflow |
 | Week 5 | All | ⬜ Pending | Hardening, golden-set metrics, demo |
@@ -29,6 +30,7 @@
 |----------|--------------|----------------|--------|
 | Dashboard | Streamlit | **Next.js (React)** | Better UX, modern design, HITL workflow requires rich UI |
 | Package manager | poetry / pip | **uv** | Faster, lockfile-native, simpler |
+| PDF Renderer | `pdf2image` + Poppler | **`PyMuPDF` (`fitz`)** | Pure Python wheel, zero OS-level binaries (poppler) required on Windows/Linux |
 | List env vars | `list[str]` Pydantic field | **`str` field + `@property`** | pydantic-settings 2.14 JSON-parses list fields; plain string bypasses this |
 | Swagger server URL | default (0.0.0.0) | **`servers=[{"url":"http://localhost:8000"}]`** | Browsers can't connect to 0.0.0.0 |
 
