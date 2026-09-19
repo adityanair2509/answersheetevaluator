@@ -79,6 +79,7 @@ export const AppApi = {
   syncToLms: (examId, provider, courseId) => apiClient.post(`/exams/${examId}/lms-sync`, { provider, course_id: courseId }),
   requestReevaluation: (sheetId, reason) => apiClient.post(`/sheets/${sheetId}/reevaluate`, { reason }),
   getReevaluations: () => apiClient.get('/sheets/reevaluations').catch(() => []),
+  dismissReevaluation: (evalId) => apiClient.delete(`/sheets/reevaluations/${evalId}`),
   exportExamResults: (examId) => apiClient.get(`/exams/${examId}/export`),
   getGradedSheets: (status = 'ALL') => apiClient.get(`/sheets/list?status=${status}`).catch(() => []),
   getScoreAnalytics: () => apiClient.get('/exams/analytics').catch(() => null),

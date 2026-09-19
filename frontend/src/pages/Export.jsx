@@ -19,11 +19,8 @@ const Export = () => {
     setIsExporting(true);
     setError(null);
     try {
-      const response = await AppApi.exportExamResults(examId);
-
       // The backend returns a StreamingResponse (CSV),
-      // but apiClient.get() uses response.json().
-      // Since we need the raw blob for CSV download, we handle it specially.
+      // so we use a direct fetch and handle it as a blob instead of using the apiClient which expects JSON.
 
       const blob = await fetch(`/api/v1/exams/${examId}/export`).then(r => r.blob());
       const url = window.URL.createObjectURL(blob);

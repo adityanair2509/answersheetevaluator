@@ -311,7 +311,7 @@ const Dashboard = () => {
       <section className="recent-activity glass-panel animate-fade-in delay-3" style={{ marginTop: '2rem' }}>
         <div className="section-header">
           <h2>Recent Evaluation Batches</h2>
-          <button className="btn-secondary" onClick={() => navigate('/review')}>View All</button>
+          <button className="btn-secondary" onClick={() => navigate('/analytics')}>View All</button>
         </div>
         
         <div className="table-responsive">
@@ -363,8 +363,8 @@ const Dashboard = () => {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '2rem', marginTop: '2rem' }}>
         {/* Re-evaluation Requests Section */}
-        <section className="glass-panel animate-fade-in delay-4">
-          <div className="section-header">
+        <section className="glass-panel animate-fade-in delay-4" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div className="section-header" style={{ marginBottom: 0 }}>
             <h2>Re-evaluation Requests</h2>
             <span className="badge badge-status-processing">{reevalRequests.length} Pending</span>
           </div>
@@ -392,15 +392,28 @@ const Dashboard = () => {
                         <button 
                           className="btn-secondary" 
                           style={{ padding: '4px 8px', borderColor: 'var(--success-color)', color: 'var(--success-color)' }} 
-                          onClick={() => alert(`Reviewing ${req.id}`)}
-                          title="Approve"
+                          onClick={() => {
+                            const sheetId = parseInt(req.testId.replace('T-', ''));
+                            navigate(`/review?sheetId=${sheetId}`);
+                          }}
+                          title="Review Sheet"
                         >
                           <CheckCircle2 size={14} />
                         </button>
                         <button 
                           className="btn-secondary" 
                           style={{ padding: '4px 8px', borderColor: 'var(--error-color)', color: 'var(--error-color)' }} 
-                          onClick={() => alert(`Dismissing ${req.id}`)}
+                          onClick={async () => {
+                            if (window.confirm(`Reject this re-evaluation request for ${req.student}?`)) {
+                              try {
+                                const evalId = parseInt(req.id.replace('R-', ''));
+                                await AppApi.dismissReevaluation(evalId);
+                                setReevalRequests(prev => prev.filter(r => r.id !== req.id));
+                              } catch (err) {
+                                alert('Failed to reject request.');
+                              }
+                            }
+                          }}
                           title="Dismiss"
                         >
                           <ThumbsDown size={14} />
@@ -415,7 +428,7 @@ const Dashboard = () => {
         </section>
 
         {/* Class Insights Section */}
-        <section className="glass-panel animate-fade-in delay-5" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <section className="glass-panel animate-fade-in delay-5" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '1.5rem' }}>
           <div className="section-header" style={{ marginBottom: 0 }}>
             <h2>Class Insights</h2>
           </div>

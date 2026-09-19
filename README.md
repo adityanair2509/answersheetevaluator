@@ -83,29 +83,29 @@ The application is built on a modern, decoupled microservices architecture desig
 ```mermaid
 graph TD
     subgraph Frontend ["Frontend - React UI / Vite"]
-        UI1[Authentication & AuthZ]
-        UI2[Teacher Dashboard & Rubrics]
-        UI3[HITL Review Console]
-        UI4[Student Upload Portal]
+        UI1["Authentication & AuthZ"]
+        UI2["Teacher Dashboard & Rubrics"]
+        UI3["HITL Review Console"]
+        UI4["Student Upload Portal"]
     end
 
     subgraph Backend ["Backend - FastAPI (Async)"]
-        API1[Auth Middleware (JWT)]
-        API2[Document Ingestion & Image Preprocessing]
-        API3[OCR Extraction Engine]
-        API4[LLM Prompt Engineering Engine]
-        API5[RAG Vector Search]
+        API1["Auth Middleware (JWT)"]
+        API2["Document Ingestion & Preprocessing"]
+        API3["OCR Extraction Engine"]
+        API4["LLM Prompt Engine"]
+        API5["RAG Vector Search"]
     end
     
     subgraph Storage ["Persistent Storage"]
-        DB[(SQLite / PostgreSQL DB)]
-        VDB[(ChromaDB Vector Store)]
-        BLOB[(Local Storage / S3 Blob)]
+        DB[("SQLite / PostgreSQL DB")]
+        VDB[("ChromaDB Vector Store")]
+        BLOB[("Local Storage / S3 Blob")]
     end
 
     subgraph External ["External AI Services"]
-        LLM[Google Gemini 1.5 Pro API]
-        VISION[Google Cloud Vision API]
+        LLM["Google Gemini 1.5 Pro API"]
+        VISION["Google Cloud Vision API"]
     end
 
     Frontend <-->|REST API / JSON| Backend

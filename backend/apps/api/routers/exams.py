@@ -348,8 +348,11 @@ async def get_my_results(db: AsyncSession = Depends(get_db)):
     for sheet in sheets:
         total_score = 0.0
         max_score = 10.0
+        rank = None
+        percentile = None
         
         if sheet.status == SheetStatus.EVALUATED:
+            # Current sheet score
             query_score = (
                 select(func.sum(EvaluationResult.score))
                 .join(ExtractedAnswer, EvaluationResult.extracted_answer_id == ExtractedAnswer.id)
@@ -364,6 +367,32 @@ async def get_my_results(db: AsyncSession = Depends(get_db)):
             )
             max_score = (await db.execute(query_max)).scalar() or 10.0
 
+            # Calculate Rank and Percentile
+            all_scores_query = (
+                select(func.sum(EvaluationResult.score).label("score"))
+                .join(ExtractedAnswer, EvaluationResult.extracted_answer_id == ExtractedAnswer.id)
+                .join(AnswerSheet, ExtractedAnswer.answer_sheet_id == AnswerSheet.id)
+                .where(AnswerSheet.exam_id == sheet.exam_id)
+                .where(AnswerSheet.status == SheetStatus.EVALUATED)
+                .group_by(AnswerSheet.id)
+            )
+            all_scores_result = (await db.execute(all_scores_query)).all()
+            scores_list = [float(row.score or 0.0) for row in all_scores_result]
+            
+            if scores_list:
+                scores_list.sort(reverse=True)
+                student_score = float(total_score)
+                # Rank (1-indexed)
+                if student_score in scores_list:
+                    rank = scores_list.index(student_score) + 1
+                else:
+                    rank = 1
+                
+                # Percentile
+                less_than = sum(1 for s in scores_list if s < student_score)
+                total_students = len(scores_list)
+                percentile = round((less_than / total_students) * 100) if total_students > 0 else 100
+
         results.append({
             "id": f"T-{sheet.id:03d}",
             "rawId": sheet.id,
@@ -372,7 +401,9 @@ async def get_my_results(db: AsyncSession = Depends(get_db)):
             "date": sheet.created_at.strftime("%b %d, %Y"),
             "score": round(total_score, 1) if sheet.status == SheetStatus.EVALUATED else "Pending",
             "total": round(max_score, 1) if sheet.status == SheetStatus.EVALUATED else "Pending",
-            "status": sheet.status.name.replace("_", " ").title()
+            "status": sheet.status.name.replace("_", " ").title(),
+            "rank": rank,
+            "percentile": percentile
         })
     return results
 

@@ -29,11 +29,15 @@ const Sidebar = () => {
 
   const authData = localStorage.getItem('auth');
   let role = 'teacher';
+  let userName = '';
   if (authData) {
     try {
       const parsed = JSON.parse(authData);
       role = parsed.role || 'teacher';
+      userName = parsed.name || (role === 'teacher' ? 'Arnav Panwala' : 'Student User');
     } catch (e) {}
+  } else {
+    userName = 'Arnav Panwala';
   }
 
   const navItems = role === 'teacher' ? [
@@ -74,22 +78,22 @@ const Sidebar = () => {
         ))}
       </nav>
 
-      <div className="connection-status">
-        <div className={`status-dot ${isConnected === true ? 'online' : isConnected === false ? 'offline' : 'pending'}`}></div>
-        <span className="status-text">
-          {isConnected === true ? 'Server Online' : isConnected === false ? 'Server Offline' : 'Connecting...'}
-        </span>
-      </div>
-
       <div className="sidebar-footer">
+        <div className="connection-status" style={{ marginBottom: '1rem', marginLeft: '0.75rem', marginRight: '0.75rem', width: 'auto' }}>
+          <div className={`status-dot ${isConnected === true ? 'online' : isConnected === false ? 'offline' : 'pending'}`}></div>
+          <span className="status-text">
+            {isConnected === true ? 'Server Online' : isConnected === false ? 'Server Offline' : 'Connecting...'}
+          </span>
+        </div>
+
         <div className="profile-container">
           <button 
             className={`user-profile card-hover ${profileOpen ? 'open' : ''}`}
             onClick={() => setProfileOpen(!profileOpen)}
           >
-            <div className="avatar">{role === 'teacher' ? 'AP' : 'ST'}</div>
+            <div className="avatar">{userName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}</div>
             <div className="user-info">
-              <p className="name">{role === 'teacher' ? 'Arnav Panwala' : 'Student User'}</p>
+              <p className="name">{userName}</p>
               <p className="role">{role === 'teacher' ? 'Administrator' : 'Student'}</p>
             </div>
           </button>

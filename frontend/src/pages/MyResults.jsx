@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { FileText, Award, AlertCircle, Eye, Search, ArrowUpRight, Download } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -176,7 +177,7 @@ const MyResults = () => {
                     className="btn-secondary" 
                     style={{ padding: '6px 12px', fontSize: '0.85rem' }}
                     onClick={() => setSelectedResult(result)}
-                    disabled={result.status !== 'Graded'}
+                    disabled={result.status !== 'Graded' && result.status !== 'Evaluated'}
                   >
                     <Eye size={14} style={{ marginRight: '6px' }} />
                     View Details
@@ -196,7 +197,7 @@ const MyResults = () => {
       </div>
 
       {/* Details Modal */}
-      {selectedResult && !showReevalModal && (
+      {selectedResult && !showReevalModal && createPortal(
         <div className="modal-overlay" onClick={() => setSelectedResult(null)}>
           <div className="modal-content glass-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%' }}>
             <div className="modal-header">
@@ -263,11 +264,12 @@ const MyResults = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Re-evaluation Modal */}
-      {showReevalModal && (
+      {showReevalModal && createPortal(
         <div className="modal-overlay" onClick={() => setShowReevalModal(false)}>
           <div className="modal-content glass-panel" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
@@ -305,7 +307,8 @@ const MyResults = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <style>{`
@@ -324,7 +327,8 @@ const MyResults = () => {
           width: 90%;
           max-width: 500px;
           border-radius: 16px;
-          overflow: hidden;
+          overflow-y: auto;
+          max-height: 90vh;
           box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
           animation: slideUp 0.3s ease-out forwards;
         }

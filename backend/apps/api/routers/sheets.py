@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status, BackgroundTasks
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from pathlib import Path
@@ -161,12 +161,13 @@ async def upload_answer_sheets(
 
     # Validate file formats
     for file in files:
-        ext = ("." + file.filename.split(".")[-1]).lower() if "." in file.filename else ""
+        filename = file.filename or ""
+        ext = ("." + filename.split(".")[-1]).lower() if "." in filename else ""
         content_type = file.content_type or ""
         if ext not in ALLOWED_EXTENSIONS and content_type not in ALLOWED_MIME_TYPES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported file type '{file.filename}'. Please upload a PDF, JPG, or PNG file."
+                detail=f"Unsupported file type '{filename}'. Please upload a PDF, JPG, or PNG file."
             )
 
     created_sheet_ids = []
@@ -177,9 +178,12 @@ async def upload_answer_sheets(
         raw_files = []
         for file in files:
             contents = await file.read()
-            mime_type = file.content_type or ("application/pdf" if file.filename.endswith(".pdf") else "image/jpeg")
-            filenames.append(file.filename)
-            raw_files.append({"filename": file.filename, "bytes": contents, "mime_type": mime_type})
+            if not isinstance(contents, bytes):
+                contents = b""
+            filename = file.filename or "unknown"
+            mime_type = file.content_type or ("application/pdf" if filename.endswith(".pdf") else "image/jpeg")
+            filenames.append(filename)
+            raw_files.append({"filename": filename, "bytes": contents, "mime_type": mime_type})
 
         joined_filenames = ", ".join(filenames)
         sheet = AnswerSheet(
@@ -205,10 +209,10 @@ async def upload_answer_sheets(
         sheet_dir = settings.upload_dir / f"sheet_{sheet.id}"
         sheet_dir.mkdir(parents=True, exist_ok=True)
         for idx, rf in enumerate(raw_files):
-            safe_name = Path(rf["filename"]).name.replace(" ", "_")
+            safe_name = Path(rf["filename"]).name.replace(" ", "_") # type: ignore
             dest_file = sheet_dir / f"page_{idx + 1}_{safe_name}"
             with open(dest_file, "wb") as f_out:
-                f_out.write(rf["bytes"])
+                f_out.write(rf["bytes"]) # type: ignore
             page = SheetPage(
                 answer_sheet_id=sheet.id,
                 page_number=idx + 1,
@@ -227,12 +231,15 @@ async def upload_answer_sheets(
         # For non-multi-page, each file is treated as a separate AnswerSheet
         for file in files:
             contents = await file.read()
-            mime_type = file.content_type or ("application/pdf" if file.filename.endswith(".pdf") else "image/jpeg")
+            if not isinstance(contents, bytes):
+                contents = b""
+            filename = file.filename or "unknown"
+            mime_type = file.content_type or ("application/pdf" if filename.endswith(".pdf") else "image/jpeg")
 
             sheet = AnswerSheet(
                 exam_id=exam_id,
                 student_roll=student_roll or "2024CS001",
-                original_filename=file.filename,
+                original_filename=filename,
                 page_count=1,
                 status=SheetStatus.UPLOADED
             )
@@ -251,7 +258,7 @@ async def upload_answer_sheets(
             # Persist physical file and create SheetPage record
             sheet_dir = settings.upload_dir / f"sheet_{sheet.id}"
             sheet_dir.mkdir(parents=True, exist_ok=True)
-            safe_name = Path(file.filename).name.replace(" ", "_")
+            safe_name = Path(filename).name.replace(" ", "_")
             dest_file = sheet_dir / f"page_1_{safe_name}"
             with open(dest_file, "wb") as f_out:
                 f_out.write(contents)
@@ -297,6 +304,7 @@ async def list_graded_sheets(
             selectinload(AnswerSheet.exam),
             selectinload(AnswerSheet.extracted_answers).selectinload(ExtractedAnswer.evaluation_result)
         )
+        .distinct()
     )
 
     if status == "AUTO_APPROVED":
@@ -420,6 +428,7 @@ async def list_reevaluation_requests(db: AsyncSession = Depends(get_db)):
         .join(ExtractedAnswer, EvaluationResult.extracted_answer_id == ExtractedAnswer.id)
         .join(AnswerSheet, ExtractedAnswer.answer_sheet_id == AnswerSheet.id)
         .join(Exam, AnswerSheet.exam_id == Exam.id)
+        .options(selectinload(EvaluationResult.extracted_answer))
         .where(ConfidenceFlag.flag_type == "student_reeval_request")
         .order_by(ConfidenceFlag.created_at.desc())
     )
@@ -437,13 +446,13 @@ async def list_reevaluation_requests(db: AsyncSession = Depends(get_db)):
 
         # Get related sheet/exam
         sheet = await db.get(AnswerSheet, ev.extracted_answer.answer_sheet_id)
-        exam = await db.get(Exam, sheet.exam_id)
+        exam = await db.get(Exam, sheet.exam_id) if sheet else None
 
         out.append({
             "id": f"R-{ev.id:03d}",
-            "student": sheet.student_roll or "N/A",
+            "student": sheet.student_roll if sheet and sheet.student_roll else "N/A",
             "subject": exam.title if exam else "Unknown Exam",
-            "testId": f"T-{sheet.id:03d}",
+            "testId": f"T-{sheet.id:03d}" if sheet else "N/A",
             "reason": flag.detail if flag else "No reason provided",
             "status": "Pending",
             "date": flag.created_at.strftime("%b %d, %Y") if flag else "N/A"
@@ -589,6 +598,12 @@ async def approve_score(
     if sheet:
         sheet.status = SheetStatus.EVALUATED
 
+    # Clear any pending re-evaluation request flags for this question
+    await db.execute(delete(ConfidenceFlag).where(
+        ConfidenceFlag.evaluation_result_id == eval_res.id,
+        ConfidenceFlag.flag_type == "student_reeval_request"
+    ))
+
     await db.commit()
 
     return {
@@ -676,3 +691,26 @@ async def request_reevaluation(
         "question_number": req.question_number,
         "reviewStatus": "NEEDS_REVIEW"
     }
+
+@router.delete("/reevaluations/{eval_id}")
+async def dismiss_reevaluation(
+    eval_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    query = select(ConfidenceFlag).where(
+        ConfidenceFlag.evaluation_result_id == eval_id,
+        ConfidenceFlag.flag_type == "student_reeval_request"
+    )
+    result = await db.execute(query)
+    flag = result.scalar_one_or_none()
+    
+    if not flag:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Re-evaluation request not found."
+        )
+        
+    await db.delete(flag)
+    await db.commit()
+    
+    return {"message": "Re-evaluation request dismissed successfully."}

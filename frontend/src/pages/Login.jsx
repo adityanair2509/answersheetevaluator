@@ -24,9 +24,24 @@ const Login = () => {
     }
   }, [navigate]);
 
-  const setAuthData = () => {
+  const generateNameFromEmail = (emailStr) => {
+    if (!emailStr) return role === 'teacher' ? 'Arnav Panwala' : 'Student User';
+    const prefix = emailStr.split('@')[0];
+    return prefix.split('.').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+  };
+
+  const setAuthData = (name, emailStr) => {
+    const finalEmail = emailStr || email || (role === 'teacher' ? 'arnav.panwala@autoeval.edu' : 'student@autoeval.edu');
+    const finalName = name || generateNameFromEmail(finalEmail);
+    
     const expires = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
-    localStorage.setItem('auth', JSON.stringify({ token: 'demo-token', expires, role }));
+    localStorage.setItem('auth', JSON.stringify({ 
+      token: 'demo-token', 
+      expires, 
+      role,
+      name: finalName,
+      email: finalEmail
+    }));
   };
 
   const handleLogin = (e) => {
@@ -42,7 +57,7 @@ const Login = () => {
 
     setLoading(true);
     setTimeout(() => {
-      setAuthData();
+      setAuthData(null, email);
       navigate('/dashboard');
     }, 600);
   };
@@ -70,7 +85,7 @@ const Login = () => {
     
     setLoading(true);
     setTimeout(() => {
-      setAuthData();
+      setAuthData(formName.trim(), formEmail.trim());
       navigate('/dashboard');
     }, 600);
   };

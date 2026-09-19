@@ -5,12 +5,28 @@ import './Account.css';
 const Account = () => {
   const [isEditing, setIsEditing] = useState(false);
   const profileBackupRef = useRef(null);
+  const authData = localStorage.getItem('auth');
+  let userRole = 'teacher';
+  let userName = '';
+  let userEmail = '';
+  if (authData) {
+    try {
+      const parsed = JSON.parse(authData);
+      userRole = parsed.role || 'teacher';
+      userName = parsed.name || (userRole === 'teacher' ? 'Arnav Panwala' : 'Student User');
+      userEmail = parsed.email || (userRole === 'teacher' ? 'arnav.panwala@autoeval.edu' : 'student@autoeval.edu');
+    } catch (e) {}
+  } else {
+    userName = 'Arnav Panwala';
+    userEmail = 'arnav.panwala@autoeval.edu';
+  }
+
   const [profile, setProfile] = useState({
-    name: 'Professor Anderson',
-    role: 'Administrator',
-    department: 'Department of Computer Science',
-    email: 'admin@autoeval.edu',
-    id: 'EMP-88204'
+    name: userName,
+    role: userRole === 'teacher' ? 'Administrator' : 'Student',
+    department: userRole === 'teacher' ? 'Department of Computer Science' : 'Computer Science (B.Tech)',
+    email: userEmail,
+    id: userRole === 'teacher' ? 'EMP-88204' : 'STU-10293'
   });
 
   const handleProfileChange = (e) => {
