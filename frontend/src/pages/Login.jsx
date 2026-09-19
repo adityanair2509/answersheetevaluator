@@ -49,6 +49,25 @@ const Login = () => {
 
   const handleRegister = (e) => {
     e.preventDefault();
+    setError('');
+    
+    const formEmail = e.target.querySelector('input[type="email"]')?.value;
+    const formPassword = e.target.querySelector('input[type="password"]')?.value;
+    const formName = e.target.querySelector('input[type="text"]')?.value;
+    
+    if (!formName || !formName.trim()) {
+      setError('Please enter your name.');
+      return;
+    }
+    if (!formEmail || !formEmail.includes('@')) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    if (!formPassword || formPassword.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+    
     setLoading(true);
     setTimeout(() => {
       setAuthData();

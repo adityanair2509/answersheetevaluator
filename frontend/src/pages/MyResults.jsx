@@ -9,6 +9,7 @@ const MyResults = () => {
   const [selectedResult, setSelectedResult] = useState(null);
   const [showReevalModal, setShowReevalModal] = useState(false);
   const [reevalReason, setReevalReason] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [results, setResults] = useState([]);
 
@@ -27,12 +28,28 @@ const MyResults = () => {
     r.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleReevalSubmit = (e) => {
+  const handleReevalSubmit = async (e) => {
     e.preventDefault();
-    // In a real app, this would make an API call
-    alert(`Re-evaluation requested for ${selectedResult.id}. Reason: ${reevalReason}`);
-    setShowReevalModal(false);
-    setReevalReason('');
+    if (!reevalReason.trim()) return;
+    
+    setIsSubmitting(true);
+    try {
+      const { AppApi } = await import('../api/client');
+      await AppApi.requestReevaluation(selectedResult.rawId || selectedResult.id, reevalReason);
+      
+      // Update local state to reflect 'Under Review'
+      setResults(prev => prev.map(r => r.id === selectedResult.id ? { ...r, status: 'Under Review' } : r));
+      setSelectedResult(prev => ({ ...prev, status: 'Under Review' }));
+      
+      alert(`Re-evaluation requested for ${selectedResult.id}. It has been sent to your teacher.`);
+      setShowReevalModal(false);
+      setReevalReason('');
+    } catch (err) {
+      console.error(err);
+      alert("Failed to submit request.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const generatePDF = (result) => {
@@ -58,15 +75,17 @@ const MyResults = () => {
       doc.text(`Status: ${result.status}`, 14, 73);
 
       // Score Table
+      const tableBody = [
+        ['Score Obtained', `${result.score} out of ${result.total}`],
+        ['Percentage', `${Math.round((result.score / result.total) * 100)}%`],
+      ];
+      if (result.rank != null) tableBody.push(['Class Rank', `#${result.rank}`]);
+      if (result.percentile != null) tableBody.push(['Percentile', `${result.percentile}th`]);
+
       autoTable(doc, {
         startY: 85,
         head: [['Metric', 'Value']],
-        body: [
-          ['Score Obtained', `${result.score} out of ${result.total}`],
-          ['Percentage', `${Math.round((result.score / result.total) * 100)}%`],
-          ['Class Rank', `#${result.rank}`],
-          ['Percentile', `${result.percentile}th`]
-        ],
+        body: tableBody,
         headStyles: { fillColor: [255, 51, 51] },
         theme: 'grid',
       });
@@ -140,12 +159,12 @@ const MyResults = () => {
                   ) : '-'}
                 </td>
                 <td>
-                  {result.rank ? (
+                  {result.rank != null ? (
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <span>Rank: #{result.rank}</span>
-                      <span className="text-muted" style={{ fontSize: '0.8rem' }}>Top {100 - result.percentile}%</span>
+                      {result.percentile != null && <span className="text-muted" style={{ fontSize: '0.8rem' }}>Top {100 - result.percentile}%</span>}
                     </div>
-                  ) : '-'}
+                  ) : <span className="text-muted">N/A</span>}
                 </td>
                 <td>
                   <span className={`badge badge-status-${result.status.toLowerCase().replace(' ', '-')}`}>
@@ -195,13 +214,13 @@ const MyResults = () => {
                   </div>
                   <div className="stat-card" style={{ background: 'var(--bg-primary)', padding: '15px' }}>
                     <p className="text-muted" style={{ fontSize: '0.9rem' }}>Percentile</p>
-                    <h3 style={{ fontSize: '1.75rem', whiteSpace: 'nowrap' }}>{selectedResult.percentile}th</h3>
+                    <h3 style={{ fontSize: '1.75rem', whiteSpace: 'nowrap' }}>{selectedResult.percentile != null ? `${selectedResult.percentile}th` : 'N/A'}</h3>
                   </div>
                   <div className="stat-card" style={{ gridColumn: '1 / -1', background: 'var(--bg-primary)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
                         <p className="text-muted">Class Rank</p>
-                        <h3>#{selectedResult.rank}</h3>
+                        <h3>{selectedResult.rank != null ? `#${selectedResult.rank}` : 'N/A'}</h3>
                       </div>
                       <Award size={32} style={{ color: 'var(--warning-color)' }} />
                     </div>
@@ -236,9 +255,10 @@ const MyResults = () => {
                   className="btn-secondary" 
                   style={{ color: 'var(--error-color)', borderColor: 'var(--error-color)' }}
                   onClick={() => setShowReevalModal(true)}
+                  disabled={selectedResult.status === 'Under Review'}
                 >
                   <AlertCircle size={16} style={{ marginRight: '8px' }} />
-                  Request Re-evaluation
+                  {selectedResult.status === 'Under Review' ? 'Already Requested' : 'Request Re-evaluation'}
                 </button>
               </div>
             </div>
@@ -280,8 +300,8 @@ const MyResults = () => {
                 </div>
               </div>
               <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', padding: '15px', borderTop: '1px solid var(--border-glass)' }}>
-                <button type="button" className="btn-secondary" onClick={() => setShowReevalModal(false)}>Cancel</button>
-                <button type="submit" className="btn-primary">Submit Request</button>
+                <button type="button" className="btn-secondary" onClick={() => setShowReevalModal(false)} disabled={isSubmitting}>Cancel</button>
+                <button type="submit" className="btn-primary" disabled={isSubmitting}>{isSubmitting ? 'Submitting...' : 'Submit Request'}</button>
               </div>
             </form>
           </div>

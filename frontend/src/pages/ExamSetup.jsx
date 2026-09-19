@@ -11,6 +11,7 @@ const ExamSetup = () => {
   const [questions, setQuestions] = useState([
     { question_number: 1, question_text: '', expected_answer: '', max_marks: 10 }
   ]);
+  const [referenceFile, setReferenceFile] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -82,6 +83,13 @@ const ExamSetup = () => {
         });
       }
 
+      // 3. Upload Reference Document if present
+      if (referenceFile) {
+        const formData = new FormData();
+        formData.append('file', referenceFile);
+        await AppApi.uploadReferenceDocument(exam.id, formData);
+      }
+
       setSuccess(`Exam "${exam.title}" created successfully with ID: ${exam.id}`);
       setTimeout(() => navigate('/dashboard'), 2000);
     } catch (err) {
@@ -138,6 +146,22 @@ const ExamSetup = () => {
               style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
             />
           </div>
+        </div>
+      </div>
+
+      <div className="glass-panel" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+        <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>Reference Materials (Optional)</h3>
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.4rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Upload Textbook Chapter or Syllabus (PDF)</label>
+          <input 
+            type="file" 
+            accept=".pdf,.txt"
+            onChange={(e) => setReferenceFile(e.target.files[0])}
+            style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+          />
+          <p style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            This document will be vectorised and stored in ChromaDB. The AI will retrieve relevant sections automatically during evaluation to award partial credit based on course materials.
+          </p>
         </div>
       </div>
 

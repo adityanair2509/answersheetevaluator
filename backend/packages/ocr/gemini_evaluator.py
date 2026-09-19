@@ -4,22 +4,24 @@ from google import genai
 from google.genai import types
 
 def evaluate_answer_sheet(
-    image_bytes: bytes, 
-    mime_type: str = "image/jpeg",
+    files_data: list[dict], 
     question_text: str | None = None,
     expected_answer: str | None = None,
-    max_marks: float = 10.0
+    max_marks: float = 10.0,
+    reference_context: str | None = None
 ) -> dict:
     """
-    Evaluates a student's answer sheet image or PDF using Gemini AI (or fallback logic).
+    Evaluates a student's answer sheet image(s) or PDF(s) using Gemini AI (or fallback logic).
     Uses teacher's defined question and ground truth expected answer if available.
+    files_data should be a list of dictionaries with 'bytes' and 'mime_type' keys.
     """
     question_context = f"\nQuestion: {question_text}" if question_text else ""
     rubric_context = f"\nGround Truth Expected Answer (DO NOT INVENT UNRELATED ANSWER): {expected_answer}" if expected_answer else ""
+    ref_context = f"\n\n<Textbook Reference Context>\n{reference_context}\n</Textbook Reference Context>\nUse this context to award partial credit for equivalent methods or wording." if reference_context else ""
 
     prompt = f"""
     You are an expert AI evaluator for handwritten exam answer sheets.
-    Examine the provided image or document of a student's answer sheet.{question_context}{rubric_context}
+    Examine the provided image(s) or document(s) of a student's answer sheet.{question_context}{rubric_context}{ref_context}
     Maximum score for this question: {max_marks}.
 
     Task:
@@ -41,9 +43,10 @@ def evaluate_answer_sheet(
     - reviewStatus (string): "AUTO_APPROVED" if aiConfidence >= 85 else "NEEDS_REVIEW".
     """
 
+    from packages.common.config import get_settings
+    settings = get_settings()
+
     try:
-        from packages.common.config import get_settings
-        settings = get_settings()
         api_key = settings.gemini_api_key
 
         if not api_key or api_key == "YOUR_GEMINI_API_KEY":
@@ -51,12 +54,11 @@ def evaluate_answer_sheet(
 
         client = genai.Client(api_key=api_key)
 
+        parts = [types.Part.from_bytes(data=f["bytes"], mime_type=f["mime_type"]) for f in files_data]
+
         response = client.models.generate_content(
             model="gemini-2.5-flash",
-            contents=[
-                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                prompt
-            ],
+            contents=[*parts, prompt],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
             )
@@ -73,9 +75,13 @@ def evaluate_answer_sheet(
         return data
 
     except Exception as e:
-        print(f"[GeminiEvaluator] Note/Fallback ({e})")
+        print(f"[GeminiEvaluator] Error during evaluation: {e}")
+
+        # Only provide fallback data if demo_mode is explicitly enabled
+        if not settings.demo_mode:
+            raise e
+
         # Reliable fallback for local demo mode without active API key
-        
         fallback_text = (
             "2x² - x - 6 = 0\n"
             "2x² - 4x + 3x - 6 = 0\n"
@@ -84,22 +90,24 @@ def evaluate_answer_sheet(
             "x = -3/2, x = 2"
         )
         
-        if mime_type == "application/pdf":
-            try:
-                import pypdf
-                import io
-                reader = pypdf.PdfReader(io.BytesIO(image_bytes))
-                extracted = []
-                for page in reader.pages:
-                    text = page.extract_text()
-                    if text:
-                        extracted.append(text)
-                if extracted:
-                    text_content = "\n".join(extracted).strip()
-                    if text_content:
-                        fallback_text = text_content
-            except Exception as pdf_err:
-                print(f"[GeminiEvaluator] PDF extraction failed: {pdf_err}")
+        extracted_texts = []
+        for file_data in files_data:
+            if file_data["mime_type"] == "application/pdf":
+                try:
+                    import pypdf
+                    import io
+                    reader = pypdf.PdfReader(io.BytesIO(file_data["bytes"]))
+                    for page in reader.pages:
+                        text = page.extract_text()
+                        if text:
+                            extracted_texts.append(text)
+                except Exception as pdf_err:
+                    print(f"[GeminiEvaluator] PDF extraction failed: {pdf_err}")
+        
+        if extracted_texts:
+            text_content = "\n".join(extracted_texts).strip()
+            if text_content:
+                fallback_text = text_content
 
         fallback_expected = expected_answer or (
             "To solve 2x² - x - 6 = 0: Split the middle term to get 2x² - 4x + 3x - 6 = 0. "
@@ -109,13 +117,14 @@ def evaluate_answer_sheet(
             "studentAnswer": fallback_text,
             "expectedAnswer": fallback_expected,
             "llmRationale": (
-                f"Evaluated with fallback extraction logic. The student text was processed locally. "
-                f"Awarding full credit ({max_marks}/{max_marks}) based on extracted content."
+                f"Extracted student content locally. Recommended for teacher review ({max_marks}/{max_marks} preliminary score)."
             ),
-            "reasoning": "Fallback local evaluation.",
+            "reasoning": "Extracted student content locally. Recommended for teacher review.",
             "score": float(max_marks),
             "maxScore": float(max_marks),
-            "aiConfidence": 92,
-            "missingConcepts": ["Minor layout spacing could be improved."],
-            "reviewStatus": "AUTO_APPROVED"
+            "aiConfidence": 78,
+            "missingConcepts": ["Manual review recommended to verify extracted text against answer key."],
+            "reviewStatus": "NEEDS_REVIEW"
         }
+
+

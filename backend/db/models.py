@@ -309,7 +309,10 @@ class ProcessingJob(Base):
     """
 
     __tablename__ = "processing_jobs"
-    __table_args__ = (Index("ix_processing_jobs_sheet_id", "answer_sheet_id"),)
+    __table_args__ = (
+        Index("ix_processing_jobs_sheet_id", "answer_sheet_id"),
+        Index("ix_processing_jobs_status", "status"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     answer_sheet_id: Mapped[int] = mapped_column(
@@ -343,6 +346,9 @@ class EvaluationResult(Base):
     """
 
     __tablename__ = "evaluation_results"
+    __table_args__ = (Index("ix_eval_review_status", "review_status"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     extracted_answer_id: Mapped[int] = mapped_column(

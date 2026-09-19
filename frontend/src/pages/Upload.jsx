@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UploadCloud, File, X, AlertCircle, Layers, CheckCircle2, Loader2, Zap } from 'lucide-react';
+import { UploadCloud, File, X, AlertCircle, Loader2, Zap } from 'lucide-react';
 import { AppApi } from '../api/client';
 import './Upload.css';
 
@@ -12,12 +12,23 @@ const Upload = () => {
   const [files, setFiles] = useState([]);
   const [examId, setExamId] = useState('1');
   const [studentRoll, setStudentRoll] = useState('2024CS001');
+  const [isMultiPage, setIsMultiPage] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [processedFileCount, setProcessedFileCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState(null);
 
   const navigate = useNavigate();
+  const progressIntervalRef = useRef(null);
+  const blobUrlsRef = useRef([]);
+
+  // Cleanup interval and blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+      blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, []);
 
   const validateFiles = (fileList, currentFiles) => {
     const valid = [];
@@ -107,58 +118,80 @@ const Upload = () => {
     setUploadProgress(10);
     setProcessedFileCount(1);
 
-    // Simulate progress interval for multi-file batch evaluation
-    const progressInterval = setInterval(() => {
+    const totalFiles = files.length;
+
+    // Progress interval using ref for reliable cleanup
+    progressIntervalRef.current = setInterval(() => {
       setProcessedFileCount((prevCount) => {
         const next = prevCount + 1;
-        if (next >= files.length) {
-          clearInterval(progressInterval);
+        if (next >= totalFiles) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
           setUploadProgress(100);
-          return files.length;
+          return totalFiles;
         }
-        setUploadProgress(Math.round((next / files.length) * 100));
+        setUploadProgress(Math.round((next / totalFiles) * 100));
         return next;
       });
-    }, Math.max(100, Math.round(1500 / files.length)));
+    }, Math.max(100, Math.round(1500 / totalFiles)));
 
     const formData = new FormData();
     formData.append('exam_id', examId);
     formData.append('student_roll', studentRoll);
+    formData.append('is_multi_page', isMultiPage);
     files.forEach(file => formData.append('files', file));
 
     try {
       const response = await AppApi.uploadAnswerSheets(formData);
 
-      clearInterval(progressInterval);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
       setUploadProgress(100);
 
-      const uploadedFileUrl = files.length > 0 ? URL.createObjectURL(files[0]) : null;
-      const uploadedFileType = files.length > 0 ? files[0].type : null;
+      // Revoke previously created blob URLs before creating new ones
+      blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+      const uploadedFileUrls = files.map(f => URL.createObjectURL(f));
+      blobUrlsRef.current = uploadedFileUrls;
+      const uploadedFileTypes = files.map(f => f.type);
 
-      if (uploadedFileUrl) {
-        sessionStorage.setItem('previewFileUrl', uploadedFileUrl);
-        sessionStorage.setItem('previewFileType', uploadedFileType);
+      if (uploadedFileUrls.length > 0) {
+        sessionStorage.setItem('previewFileUrls', JSON.stringify(uploadedFileUrls));
+        sessionStorage.setItem('previewFileTypes', JSON.stringify(uploadedFileTypes));
+        // Fallback for old single-file components
+        sessionStorage.setItem('previewFileUrl', uploadedFileUrls[0]);
+        sessionStorage.setItem('previewFileType', uploadedFileTypes[0]);
       }
 
-      let sheetId = response.sheet_id;
-      if (response && response.results && response.results.length > 0) {
-        const evalData = response.results[0];
+      if (!response || !response.sheet_ids || response.sheet_ids.length === 0) {
+        throw new Error(response?.detail || "Upload succeeded but no sheet records were returned by the server.");
+      }
+
+      const sheetId = response.sheet_ids[0];
+      const jobIds = response.job_ids || [];
+
+      if (evalData) {
         sessionStorage.setItem('evaluationData', JSON.stringify(evalData));
-        if (evalData.sheetId) sheetId = evalData.sheetId;
       }
 
       setUploading(false);
       setFiles([]);
-      navigate('/review', { 
+      navigate(`/review?sheetId=${sheetId}`, { 
         state: { 
           sheetId, 
-          fileUrl: uploadedFileUrl, 
-          fileType: uploadedFileType,
-          evaluationData: response.results ? response.results[0] : null
+          fileUrls: uploadedFileUrls,
+          fileTypes: uploadedFileTypes,
+          fileUrl: uploadedFileUrls.length > 0 ? uploadedFileUrls[0] : null, 
+          fileType: uploadedFileTypes.length > 0 ? uploadedFileTypes[0] : null,
+          evaluationData: evalData
         } 
       });
     } catch (error) {
-      clearInterval(progressInterval);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
       console.error('Upload failed:', error);
       setUploading(false);
       setErrorMessage(error.message || "Failed to upload and evaluate answer sheets. Please ensure backend is active.");
@@ -239,6 +272,18 @@ const Upload = () => {
                 color: 'var(--text-primary)'
               }}
             />
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '0.4rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Evaluation Mode:</label>
+            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '0.6rem 0.8rem', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+              <input 
+                type="checkbox" 
+                checked={isMultiPage} 
+                onChange={(e) => setIsMultiPage(e.target.checked)} 
+                style={{ marginRight: '0.5rem', width: '16px', height: '16px', accentColor: 'var(--accent-primary)' }}
+              />
+              Stitch as single multi-page sheet
+            </label>
           </div>
         </div>
       </div>

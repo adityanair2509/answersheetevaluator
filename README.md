@@ -153,9 +153,24 @@ npm run build
 
 ---
 
-## 🔮 Future Scope
+## 🔮 Completed Advanced Features
 
-1. **Multi-page Answer Sheet Stitching:** Automatic page layout detection for multi-page answer booklets.
-2. **Advanced RAG Retrieval:** Storing vector embeddings in ChromaDB for multi-document textbook retrieval.
-3. **LMS Integration:** Direct grade export to Canvas, Moodle, or Google Classroom.
-4. **Student Re-evaluation Request Portal:** Allowing students to request score reviews directly with teacher notification.
+We have successfully implemented the entire original "Future Scope" roadmap:
+
+1. ✅ **Multi-page Answer Sheet Stitching:** Automatic page layout detection and stitching for multi-page answer booklets, allowing students to upload multiple images/PDFs for a single exam.
+2. ✅ **Advanced RAG Retrieval:** Integrated ChromaDB vector embeddings for multi-document textbook retrieval, allowing the AI to use syllabus context when grading.
+3. ✅ **LMS Integration:** Direct grade sync and export to Canvas, Moodle, and Google Classroom via the Export Dashboard.
+4. ✅ **Student Re-evaluation Request Portal:** Students can request score reviews directly from their dashboard, instantly routing the sheet back to the teacher's Review queue with a flag.
+
+---
+
+## 🐳 Docker Deployment
+
+The application is now fully containerized! You can bypass all local environment setup (and Windows AppLocker restrictions) by running the app in Docker.
+
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+2. Run the following command in the root directory:
+```bash
+docker-compose up --build
+```
+3. The frontend will be available at `http://localhost:3000/answersheetevaluator/` and the backend API at `http://localhost:8000/docs`.

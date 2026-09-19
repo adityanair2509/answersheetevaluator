@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Brain, FileText, BarChart3, ScanText, ArrowRight, Zap, ShieldCheck, Settings, Upload, CheckCircle2, Bot, BookOpen, Layers, Plus, Minus, XCircle, Loader2, AlertCircle, Sparkles, Sun, Moon } from 'lucide-react';
 import katex from 'katex';
@@ -49,9 +49,29 @@ const SequentialTypewriterText = ({ text, isActive, onComplete, speed = 30 }) =>
 const Landing = () => {
   const [openFaq, setOpenFaq] = useState(0);
   const [activeWorkflowStep, setActiveWorkflowStep] = useState(0);
+  const [isConnected, setIsConnected] = useState(null);
   const [isLightMode, setIsLightMode] = useState(() => {
     return localStorage.getItem('theme') === 'light';
   });
+
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/health');
+        if (response.ok) {
+          setIsConnected(true);
+        } else {
+          setIsConnected(false);
+        }
+      } catch (e) {
+        setIsConnected(false);
+      }
+    };
+
+    checkConnection();
+    const interval = setInterval(checkConnection, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   React.useEffect(() => {
     if (isLightMode) {
@@ -359,9 +379,15 @@ const Landing = () => {
             <Brain size={28} />
             ScribScore
           </Link>
-          <div className="nav-links">
-            <button 
-              className="btn-secondary" 
+          <div className="nav-links" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+            <div className="connection-status">
+              <div className={`status-dot ${isConnected === true ? 'online' : isConnected === false ? 'offline' : 'pending'}`}></div>
+              <span className="status-text">
+                {isConnected === true ? 'Server Online' : isConnected === false ? 'Server Offline' : 'Connecting...'}
+              </span>
+            </div>
+            <button
+              className="btn-secondary"
               style={{ padding: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}
               onClick={() => setIsLightMode(!isLightMode)}
               title={isLightMode ? "Switch to Dark Mode" : "Switch to Light Mode"}

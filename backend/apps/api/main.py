@@ -12,7 +12,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -37,6 +37,9 @@ from packages.common.enums import (
     ReviewStatus,
     SheetStatus,
 )
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from db.session import get_db
 
 settings = get_settings()
 
@@ -93,7 +96,11 @@ app = FastAPI(
 # In development, allow the Next.js dev server origin.
 # In production, replace with the actual deployed frontend URL.
 _allowed_origins = (
-    ["http://localhost:3000", "http://127.0.0.1:3000"]
+    [
+        "http://localhost:3000", "http://127.0.0.1:3000",
+        "http://localhost:5173", "http://127.0.0.1:5173",
+        "http://localhost:5174", "http://127.0.0.1:5174",
+    ]
     if settings.is_development
     else []  # set via environment in production
 )
@@ -147,9 +154,18 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     summary="Health check",
     tags=["System"],
 )
-async def health() -> HealthResponse:
-    """Returns 200 OK when the API is running."""
-    return HealthResponse(environment=settings.app_env)
+async def health(db: AsyncSession = Depends(get_db)) -> HealthResponse:
+    """Deep health check: Verifies API and Database connectivity."""
+    try:
+        # Verify database connectivity
+        await db.execute(select(1))
+        return HealthResponse(environment=settings.app_env)
+    except Exception as e:
+        logger.error("health_check_failed", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Backend is running but database is disconnected."
+        )
 
 
 @app.get(

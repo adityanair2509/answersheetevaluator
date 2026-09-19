@@ -14,7 +14,7 @@ def test_approve_score_and_flag_issue(api_client) -> None:
     files = {"files": ("review_test.jpg", fake_jpg, "image/jpeg")}
     upload_res = api_client.post("/api/v1/sheets/upload", data={"exam_id": "1"}, files=files)
     assert upload_res.status_code == 200
-    sheet_id = upload_res.json()["sheet_id"]
+    sheet_id = upload_res.json()["sheet_ids"][0]
 
     # Test review details fetch
     review_res = api_client.get(f"/api/v1/sheets/{sheet_id}/review")

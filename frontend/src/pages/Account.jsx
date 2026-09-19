@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { User, Mail, Briefcase, Activity, Settings, Bell, Lock, Save, Edit2, X } from 'lucide-react';
 import './Account.css';
 
 const Account = () => {
   const [isEditing, setIsEditing] = useState(false);
+  const profileBackupRef = useRef(null);
   const [profile, setProfile] = useState({
     name: 'Professor Anderson',
     role: 'Administrator',
@@ -33,7 +34,10 @@ const Account = () => {
               <button 
                 className="icon-btn" 
                 style={{ position: 'absolute', top: '1rem', right: '1rem' }}
-                onClick={() => setIsEditing(true)}
+                onClick={() => {
+                  profileBackupRef.current = { ...profile };
+                  setIsEditing(true);
+                }}
                 title="Edit Profile"
               >
                 <Edit2 size={18} />
@@ -82,7 +86,7 @@ const Account = () => {
                   <button className="btn-primary" onClick={() => setIsEditing(false)} style={{ flex: 1, padding: '0.5rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}>
                     <Save size={16} /> Save
                   </button>
-                  <button className="btn-secondary" onClick={() => setIsEditing(false)} style={{ padding: '0.5rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}>
+                  <button className="btn-secondary" onClick={() => { if (profileBackupRef.current) setProfile(profileBackupRef.current); setIsEditing(false); }} style={{ padding: '0.5rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}>
                     <X size={16} /> Cancel
                   </button>
                 </div>
@@ -129,9 +133,9 @@ const Account = () => {
                 <label>Email Notifications</label>
                 <p className="help-text">Receive daily summaries of graded batches.</p>
               </div>
-              <label className="switch">
+              <label className="account-toggle-switch">
                 <input type="checkbox" defaultChecked />
-                <span className="slider"></span>
+                <span className="account-toggle-slider"></span>
               </label>
             </div>
             

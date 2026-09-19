@@ -3,8 +3,12 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "dev": "npm run dev --prefix frontend",
+    "dev": "concurrently \"npm run dev --prefix frontend\" \"cd backend && uv run uvicorn apps.api.main:app --reload --host 0.0.0.0 --port 8000\"",
     "build": "npm run build --prefix frontend",
     "lint": "npm run lint --prefix frontend"
+  },
+
+  "devDependencies": {
+    "concurrently": "^10.0.5"
   }
 }

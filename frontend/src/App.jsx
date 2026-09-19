@@ -1,6 +1,8 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
+import GradedSheets from './pages/GradedSheets';
+import ScoreAnalytics from './pages/ScoreAnalytics';
 import StudentDashboard from './pages/StudentDashboard';
 import StudentUpload from './pages/StudentUpload';
 import MyResults from './pages/MyResults';
@@ -102,6 +104,8 @@ function App() {
         <Route path="/results" element={<ProtectedRoute><Layout><MyResults /></Layout></ProtectedRoute>} />
         <Route path="/upload" element={<ProtectedRoute><Layout><Upload /></Layout></ProtectedRoute>} />
         <Route path="/review" element={<ProtectedRoute><Layout><ReviewSession /></Layout></ProtectedRoute>} />
+        <Route path="/graded-sheets" element={<ProtectedRoute><Layout><GradedSheets /></Layout></ProtectedRoute>} />
+        <Route path="/analytics" element={<ProtectedRoute><Layout><ScoreAnalytics /></Layout></ProtectedRoute>} />
         <Route path="/export" element={<ProtectedRoute><Layout><Export /></Layout></ProtectedRoute>} />
         <Route path="/account" element={<ProtectedRoute><Layout><Account /></Layout></ProtectedRoute>} />
       </Routes>

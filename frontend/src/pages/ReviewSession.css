@@ -261,27 +261,37 @@
 
 .score-input-group {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.5rem;
 }
 
 .score-input {
-  background: var(--bg-color);
+  background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  color: var(--accent-primary);
+  color: var(--text-primary);
   font-size: 1.5rem;
   font-weight: 700;
-  width: 80px;
-  padding: 0.5rem;
-  border-radius: 0;
+  width: 90px;
+  height: 48px;
+  box-sizing: border-box;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
   text-align: center;
+  line-height: 1.2;
   transition: all var(--transition-fast);
+  -moz-appearance: textfield;
+}
+
+.score-input::-webkit-outer-spin-button,
+.score-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .score-input:focus {
   outline: none;
-  border-color: var(--accent-primary);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
 }
 
 .max-score {

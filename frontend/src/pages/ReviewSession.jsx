@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ZoomIn, ZoomOut, Check, X, AlertTriangle, BookOpen, Brain, Image as ImageIcon, CheckCircle, AlertCircle } from 'lucide-react';
+import { ZoomIn, ZoomOut, Check, X, AlertTriangle, BookOpen, Brain, Image as ImageIcon, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { AppApi } from '../api/client';
 import './ReviewSession.css';
 
@@ -8,52 +8,78 @@ const ReviewSession = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const fileUrl = location.state?.fileUrl || sessionStorage.getItem('previewFileUrl');
-  const fileType = location.state?.fileType || sessionStorage.getItem('previewFileType');
-  const sheetId = location.state?.sheetId || location.state?.evaluationData?.sheetId;
-
-  const storedEvalData = sessionStorage.getItem('evaluationData');
-  const parsedEvalData = location.state?.evaluationData || (storedEvalData ? JSON.parse(storedEvalData) : null);
-
-  const [reviewData, setReviewData] = useState(parsedEvalData || null);
-  const [score, setScore] = useState(parsedEvalData ? parsedEvalData.score : 7.5);
-  const [maxScore, setMaxScore] = useState(parsedEvalData ? (parsedEvalData.maxScore || 10) : 10);
+  const [reviewData, setReviewData] = useState(null);
+  const [score, setScore] = useState('');
+  const [maxScore, setMaxScore] = useState(10);
   const [zoom, setZoom] = useState(100);
   const [statusMsg, setStatusMsg] = useState(null);
-  const [reviewStatus, setReviewStatus] = useState(parsedEvalData?.reviewStatus || 'NEEDS_REVIEW');
-  const [loading, setLoading] = useState(false);
+  const [reviewStatus, setReviewStatus] = useState('NEEDS_REVIEW');
+  const [loading, setLoading] = useState(true);
+  const [actualSheetId, setActualSheetId] = useState(null);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+
+
+  const fileUrls = useMemo(() => {
+    if (reviewData?.fileUrls && reviewData.fileUrls.length > 0) {
+      return reviewData.fileUrls;
+    }
+    return location.state?.fileUrls || (sessionStorage.getItem('previewFileUrls') ? JSON.parse(sessionStorage.getItem('previewFileUrls')) : [location.state?.fileUrl || sessionStorage.getItem('previewFileUrl')].filter(Boolean));
+  }, [location.state, reviewData]);
+
+  const fileTypes = useMemo(() => {
+    if (reviewData?.fileTypes && reviewData.fileTypes.length > 0) {
+      return reviewData.fileTypes;
+    }
+    return location.state?.fileTypes || (sessionStorage.getItem('previewFileTypes') ? JSON.parse(sessionStorage.getItem('previewFileTypes')) : [location.state?.fileType || sessionStorage.getItem('previewFileType')].filter(Boolean));
+  }, [location.state, reviewData]);
 
   useEffect(() => {
-    if (sheetId) {
-      setLoading(true);
-      AppApi.getSheetReview(sheetId)
-        .then((data) => {
+    const searchParams = new URLSearchParams(location.search);
+    const querySheetId = searchParams.get('sheetId');
+    const idToFetch = querySheetId || location.state?.sheetId || 'next';
+
+    setLoading(true);
+    AppApi.getSheetReview(idToFetch)
+      .then((data) => {
+        if (data && (data.evaluations && data.evaluations.length > 0 || data.studentRoll)) {
           setReviewData(data);
-          setScore(data.score);
-          setMaxScore(data.maxScore || 10);
-          setReviewStatus(data.reviewStatus || 'NEEDS_REVIEW');
-        })
-        .catch((err) => {
-          console.warn("Could not fetch sheet review from backend, using state data:", err);
-        })
-        .finally(() => setLoading(false));
-    }
-  }, [sheetId]);
 
-  const studentAnswer = reviewData?.studentAnswer || (fileUrl 
-    ? "2x² - x - 6 = 0\n2x² - 4x + 3x - 6 = 0\n2x(x - 2) + 3(x - 2) = 0\n(2x + 3)(x - 2) = 0\nx = -3/2, x = 2"
-    : "Newton's second law of motion states that the rate of change of momentum of a body is directly proportional to the force applied, and this change in momentum takes place in the direction of the applied force. F = m*a where m is mass and a is acceleration.");
+          if (data.evaluations && data.evaluations.length > 0) {
+            const firstEval = data.evaluations[0];
+            setScore(firstEval.score !== undefined ? firstEval.score : 0);
+            setMaxScore(firstEval.maxScore || 10);
+            setReviewStatus(firstEval.reviewStatus || 'NEEDS_REVIEW');
+          }
+          setActualSheetId(data.sheetId);
+        } else {
+          setReviewData(null);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not fetch sheet review from backend:", err);
+        setReviewData(null);
+      })
+      .finally(() => setLoading(false));
+  }, [location.search, location.state]);
 
-  const expectedAnswer = reviewData?.expectedAnswer || (fileUrl
-    ? "To solve 2x² - x - 6 = 0: Split the middle term to get 2x² - 4x + 3x - 6 = 0. Factorize: 2x(x - 2) + 3(x - 2) = 0, giving (2x + 3)(x - 2) = 0. Roots: x = -3/2, x = 2."
-    : "Newton's second law: Force equals mass times acceleration (F=ma). The net force on an object is equal to the rate of change of its linear momentum.");
+  // Derived state for the currently selected question
+  const currentEval = useMemo(() => {
+    if (!reviewData?.evaluations || reviewData.evaluations.length === 0) return null;
+    return reviewData.evaluations[currentQuestionIndex] || reviewData.evaluations[0];
+  }, [reviewData, currentQuestionIndex]);
 
-  const llmRationale = reviewData?.llmRationale || reviewData?.reasoning || (fileUrl
-    ? "The student correctly used the middle-term splitting method for quadratic factorization. All algebraic steps are clear and logically sound, leading to the correct roots. Awarding full marks."
-    : "The student correctly identified the core definition of the law and included the formula F = m*a. Deducting small credit for minor wording imprecision.");
+  const studentAnswer = currentEval ? (currentEval.rawText || 'No text extracted from this page.') : (loading ? 'Loading extracted text...' : 'No answer sheet waiting for review.');
+  const expectedAnswer = currentEval ? (currentEval.expectedAnswer || currentEval.expected_answer || currentEval.rubric || 'No expected answer available.') : (loading ? 'Loading rubric...' : 'No rubric available.');
+  const llmRationale = currentEval ? (currentEval.llmRationale || currentEval.reasoning) : (loading ? 'Analyzing...' : 'No rationale available.');
+  const aiConfidence = currentEval ? currentEval.aiConfidence : 0;
+  const missingConcepts = currentEval ? currentEval.missingConcepts : [];
 
-  const aiConfidence = reviewData?.aiConfidence ?? 88;
-  const missingConcepts = reviewData?.missingConcepts || [];
+
+  const getFullFileUrl = (url) => {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    return import.meta.env.DEV ? `http://localhost:8000${url}` : url;
+  };
 
   const handleApprove = async () => {
     setStatusMsg(null);
@@ -64,35 +90,33 @@ const ReviewSession = () => {
     }
 
     try {
-      if (sheetId) {
-        await AppApi.approveScore(sheetId, numScore, "teacher1");
+      if (actualSheetId && currentEval) {
+        await AppApi.approveScore(actualSheetId, numScore, "teacher1", currentEval.questionNumber);
       }
       setReviewStatus('APPROVED');
-      setStatusMsg({ type: 'success', text: `Score of ${numScore}/${maxScore} successfully approved and saved to database!` });
+      setStatusMsg({ type: 'success', text: `Score of ${numScore}/${maxScore} for Q${currentEval?.questionNumber || 1} successfully approved!` });
     } catch (err) {
       console.error("Approve score error:", err);
-      setReviewStatus('APPROVED');
-      setStatusMsg({ type: 'success', text: `Score of ${numScore}/${maxScore} approved!` });
+      setStatusMsg({ type: 'error', text: `Failed to approve score: ${err.message}` });
     }
   };
 
   const handleFlag = async () => {
     setStatusMsg(null);
     try {
-      if (sheetId) {
-        await AppApi.flagIssue(sheetId, "Flagged for manual review by teacher");
+      if (actualSheetId && currentEval) {
+        await AppApi.flagIssue(actualSheetId, "Flagged for manual review by teacher", currentEval.questionNumber);
       }
       setReviewStatus('FLAGGED');
-      setStatusMsg({ type: 'warning', text: "Issue flagged successfully for teacher review!" });
+      setStatusMsg({ type: 'warning', text: `Question ${currentEval?.questionNumber || 1} flagged successfully!` });
     } catch (err) {
       console.error("Flag issue error:", err);
-      setReviewStatus('FLAGGED');
-      setStatusMsg({ type: 'warning', text: "Issue flagged for manual intervention." });
+      setStatusMsg({ type: 'error', text: `Failed to flag issue: ${err.message}` });
     }
   };
 
   const getStatusBadge = () => {
-    if (reviewStatus === 'APPROVED' || reviewStatus === 'AUTO_APPROVED') {
+    if (reviewStatus === 'APPROVED' || reviewStatus === 'AUTO_APPROVED' || reviewStatus === 'REVIEWED') {
       return <span className="badge badge-success">Approved</span>;
     }
     if (reviewStatus === 'FLAGGED') {
@@ -103,12 +127,61 @@ const ReviewSession = () => {
 
   return (
     <div className="review-container animate-fade-in">
+      {/* Fallback Mode Warning Banner */}
+      {!loading && reviewData && currentEval?.aiConfidence === 78 && (
+        <div style={{
+          backgroundColor: 'rgba(255, 165, 0, 0.15)',
+          border: '1px solid var(--warning-color)',
+          color: 'var(--warning-color)',
+          padding: '0.75rem 1rem',
+          borderRadius: '8px',
+          marginBottom: '1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          fontSize: '0.9rem',
+          fontWeight: 500
+        }}>
+          <AlertTriangle size={18} />
+          <span><strong>Local Extraction Mode:</strong> No active Gemini API key detected. This result was generated using local fallback OCR. Manual verification is strongly recommended.</span>
+        </div>
+      )}
+
       <header className="review-header">
         <div className="review-title">
           <button className="badge badge-neutral">
-            {reviewData?.studentRoll ? `Roll: ${reviewData.studentRoll}` : 'Sheet #402'}
+            {reviewData?.studentRoll ? `Roll: ${reviewData.studentRoll} (Sheet #${reviewData.sheetId})` : (loading ? 'Loading...' : 'Queue Empty')}
           </button>
-          <h1>Reviewing Answer Sheet</h1>
+          <h1 style={{ margin: '0.5rem 0' }}>Reviewing Answer Sheet</h1>
+
+          {reviewData?.evaluations && reviewData.evaluations.length > 1 && (
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Question:</span>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                {reviewData.evaluations.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setCurrentQuestionIndex(idx);
+                      setScore(reviewData.evaluations[idx].score);
+                      setMaxScore(reviewData.evaluations[idx].maxScore);
+                      setReviewStatus(reviewData.evaluations[idx].reviewStatus);
+                    }}
+                    className={`btn-secondary` + (currentQuestionIndex === idx ? ' active-question' : '')}
+                    style={{
+                      padding: '2px 8px',
+                      fontSize: '0.75rem',
+                      background: currentQuestionIndex === idx ? 'var(--accent-primary)' : 'transparent',
+                      color: currentQuestionIndex === idx ? '#000' : 'var(--text-primary)',
+                      border: '1px solid var(--border-color)'
+                    }}
+                  >
+                    {reviewData.evaluations[idx].questionNumber}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {getStatusBadge()}
         </div>
         <div className="review-actions">
@@ -149,17 +222,56 @@ const ReviewSession = () => {
               <button className="icon-btn" onClick={() => setZoom(Math.min(200, zoom + 10))}><ZoomIn size={16} /></button>
             </div>
           </div>
-          
-          <div className="image-viewer">
-            {fileUrl ? (
-              <div className="mock-document" style={{ padding: 0, overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
-                {fileType === 'application/pdf' ? (
-                  <embed src={fileUrl} type="application/pdf" style={{ width: '100%', height: '100%' }} />
-                ) : (
-                  <img src={fileUrl} alt="Uploaded sheet" style={{ width: `${zoom}%`, height: 'auto', objectFit: 'contain' }} />
-                )}
-              </div>
-            ) : (
+
+          <div className="image-viewer" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
+              {fileUrls && fileUrls.length > 0 ? (
+                fileUrls.map((url, idx) => {
+                  const fullUrl = getFullFileUrl(url);
+                  return (
+                  <div key={idx} className="mock-document" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    {fileTypes[idx] === 'application/pdf' ? (
+                      <div style={{ width: '100%', height: '100%', minHeight: '600px', position: 'relative' }}>
+                        <iframe
+                          src={`${fullUrl}#toolbar=0`}
+                          style={{ width: '100%', height: '600px', border: 'none', borderRadius: '4px' }}
+                          title={`Page ${idx + 1}`}
+                        />
+                        <div style={{
+                          position: 'absolute', top: '10px', right: '10px',
+                          zIndex: 10
+                        }}>
+                          <a
+                            href={fullUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-secondary"
+                            style={{ fontSize: '0.7rem', padding: '4px 8px' }}
+                          >
+                            Open Full PDF ↗
+                          </a>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <img
+                          src={fullUrl}
+                          alt={`Uploaded sheet page ${idx + 1}`}
+                          style={{ width: `${zoom}%`, height: 'auto', objectFit: 'contain' }}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextElementSibling.style.display = 'block';
+                          }}
+                        />
+                        <div style={{ display: 'none', padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                          <ImageIcon size={48} style={{ opacity: 0.5, marginBottom: '1rem' }} />
+                          <h4>Document Not Available</h4>
+                          <p>Unable to load document from the server.</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )})
+              ) : (
               <div className="mock-document">
                 <div className="mock-handwriting">
                   <p>Q1. Quadratic Factorization</p>
@@ -199,7 +311,7 @@ const ReviewSession = () => {
             <div className="section-title">
               <Brain size={18} className="text-purple" /> AI Evaluation & Rationale
             </div>
-            
+
             <div className="evaluation-content">
               <p className="rationale">"{llmRationale}"</p>
 
@@ -211,14 +323,14 @@ const ReviewSession = () => {
                   </ul>
                 </div>
               )}
-              
+
               <div className="scoring-widget">
                 <div className="score-control">
                   <label>Adjust Score (Out of {maxScore})</label>
                   <div className="score-input-group">
-                    <input 
-                      type="number" 
-                      value={score} 
+                    <input
+                      type="number"
+                      value={score}
                       onChange={(e) => setScore(e.target.value)}
                       step="0.5"
                       min="0"
@@ -228,7 +340,7 @@ const ReviewSession = () => {
                     <span className="max-score">/ {maxScore}</span>
                   </div>
                 </div>
-                
+
                 <div className="confidence-meter">
                   <div className="meter-label">
                     <span>AI Confidence</span>
@@ -238,8 +350,8 @@ const ReviewSession = () => {
                     <div className={`meter-fill ${aiConfidence >= 85 ? "success" : "warning"}`} style={{ width: `${aiConfidence}%`, background: aiConfidence >= 85 ? 'var(--success-color)' : '' }}></div>
                   </div>
                   <p className="meter-help">
-                    {aiConfidence >= 85 
-                      ? "High confidence score. High agreement with rubric." 
+                    {aiConfidence >= 85
+                      ? "High confidence score. High agreement with rubric."
                       : "Medium confidence score. Manual teacher review recommended."}
                   </p>
                 </div>

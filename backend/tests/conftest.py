@@ -25,10 +25,30 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./data/test.db")
 @pytest.fixture(scope="session")
 def api_client() -> TestClient:
     """Synchronous TestClient for the FastAPI app (session-scoped)."""
-    from db.session import create_all_tables
+    from db.session import create_all_tables, AsyncSessionLocal
     from apps.api.main import app
+    from db.models import Exam, Question
+    import asyncio
 
-    asyncio.run(create_all_tables())
+    async def setup_db():
+        await create_all_tables()
+        async with AsyncSessionLocal() as session:
+            # Seed a default exam and question for tests
+            exam = Exam(title="Test Exam", course_code="TEST101")
+            session.add(exam)
+            await session.flush()
+
+            question = Question(
+                exam_id=exam.id,
+                question_number=1,
+                question_text="What is 2+2?",
+                expected_answer="4",
+                max_marks=10.0
+            )
+            session.add(question)
+            await session.commit()
+
+    asyncio.run(setup_db())
 
     with TestClient(app) as client:
         yield client

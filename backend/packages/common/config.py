@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
+    demo_mode: bool = False
 
     # ── OCR ──────────────────────────────────────────────────────────────────
     ocr_provider: Literal["google_vision", "paddle_ocr", "trocr"] = "google_vision"

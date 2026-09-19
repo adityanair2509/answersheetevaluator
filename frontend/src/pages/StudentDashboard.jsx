@@ -1,12 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AppApi } from '../api/client';
 import { FileText, Award, Clock, ArrowRight, UploadCloud } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import ThemeToggle from '../components/ThemeToggle';
 import './Dashboard.css';
 
-const StatCard = ({ title, value, icon: Icon, trend, colorClass, delay }) => (
-  <div className={`stat-card glass-panel animate-fade-in ${delay} card-hover`}>
+const StatCard = ({ title, value, icon: Icon, trend, colorClass, delay, onClick }) => (
+  <div 
+    className={`stat-card glass-panel animate-fade-in ${delay} card-hover`}
+    style={{ cursor: onClick ? 'pointer' : 'default' }}
+    onClick={onClick}
+  >
     <div className="stat-header">
       <div className={`stat-icon-wrapper ${colorClass}`}>
         <Icon size={24} />
@@ -43,21 +48,90 @@ const CustomTooltip = ({ active, payload, label }) => {
 const StudentDashboard = () => {
   const navigate = useNavigate();
 
-  // Mock data for the chart
-  const progressData = [
-    { name: 'Test 1', score: 65 },
-    { name: 'Test 2', score: 72 },
-    { name: 'Midterm', score: 85 },
-    { name: 'Test 4', score: 82 },
-    { name: 'Test 5', score: 92 },
-    { name: 'Final', score: 88 }
-  ];
+  const [recentTests, setRecentTests] = useState([]);
+  const [stats, setStats] = useState({
+    testsTaken: 0,
+    averageScore: 0,
+    pendingResults: 0,
+    topSubject: 'N/A',
+    topAverage: 0,
+    topGrade: 'N/A'
+  });
+  const [progressData, setProgressData] = useState([]);
 
-  const recentTests = [
-    { id: 'T-004', subject: 'Data Structures', date: 'Nov 02, 2023', score: '88/100', status: 'Graded' },
-    { id: 'T-003', subject: 'Physics Midterm', date: 'Oct 26, 2023', score: 'Pending', status: 'Processing' },
-    { id: 'T-002', subject: 'Advanced Mathematics', date: 'Oct 25, 2023', score: '85/100', status: 'Graded' },
-  ];
+  useEffect(() => {
+    AppApi.getMyResults().then(data => {
+      setRecentTests(data.slice(0, 5)); // Keep latest 5 for recent activity
+      
+      const testsTaken = data.length;
+      let totalScore = 0;
+      let totalMax = 0;
+      let pendingCount = 0;
+      let subjectStats = {};
+      let chartData = [];
+
+      data.slice().reverse().forEach((sheet, idx) => { // Reverse to chronological for chart
+        if (sheet.status !== 'Evaluated') {
+           pendingCount++;
+        }
+        
+        if (sheet.status === 'Evaluated') {
+          const score = parseFloat(sheet.score) || 0;
+          const max = parseFloat(sheet.total) || 10;
+          totalScore += score;
+          totalMax += max;
+          
+          if (!subjectStats[sheet.subject]) {
+            subjectStats[sheet.subject] = { score: 0, max: 0 };
+          }
+          subjectStats[sheet.subject].score += score;
+          subjectStats[sheet.subject].max += max;
+          
+          chartData.push({
+            name: sheet.subject.split(' ')[0] + ' ' + (idx + 1), // shorthand name
+            score: max > 0 ? Math.round((score / max) * 100) : 0
+          });
+        }
+      });
+
+      const averageScore = totalMax > 0 ? ((totalScore / totalMax) * 100).toFixed(1) : 0;
+      
+      let topSubject = 'N/A';
+      let topAverage = 0;
+      for (const subj in subjectStats) {
+        const s = subjectStats[subj];
+        const avg = (s.score / s.max) * 100;
+        if (avg >= topAverage) {
+          topAverage = avg;
+          topSubject = subj;
+        }
+      }
+      
+      let topGrade = 'N/A';
+      if (topAverage >= 90) topGrade = 'A+';
+      else if (topAverage >= 80) topGrade = 'A';
+      else if (topAverage >= 70) topGrade = 'B';
+      else if (topAverage >= 60) topGrade = 'C';
+      else if (topAverage > 0) topGrade = 'D';
+
+      setStats({
+        testsTaken,
+        averageScore,
+        pendingResults: pendingCount,
+        topSubject,
+        topAverage: topAverage.toFixed(1),
+        topGrade
+      });
+
+      if (chartData.length === 0) {
+        // Fallback mock if no evaluated tests
+        chartData = [
+          { name: 'Test 1', score: 0 }
+        ];
+      }
+      setProgressData(chartData);
+    });
+  }, []);
 
   return (
     <div className="dashboard-container animate-fade-in">
@@ -80,21 +154,25 @@ const StudentDashboard = () => {
       </header>
 
       <section className="stats-grid">
-        <StatCard title="Tests Taken" value="24" icon={FileText} trend="+2 this month" colorClass="icon-blue" delay="delay-1" />
-        <StatCard title="Average Score" value="88%" icon={Award} trend="+3.2% vs last term" colorClass="icon-green" delay="delay-2" />
-        <StatCard title="Pending Results" value="1" icon={Clock} trend="Physics Midterm" colorClass="icon-orange" delay="delay-3" />
+        <StatCard title="Tests Taken" value={stats.testsTaken} icon={FileText} trend="" colorClass="icon-blue" delay="delay-1" onClick={() => navigate('/results')} />
+        <StatCard title="Average Score" value={`${stats.averageScore}%`} icon={Award} trend="" colorClass="icon-green" delay="delay-2" onClick={() => navigate('/results')} />
+        <StatCard title="Pending Results" value={stats.pendingResults} icon={Clock} trend="" colorClass="icon-orange" delay="delay-3" onClick={() => navigate('/results')} />
         
         {/* Top Subject Highlight */}
-        <div className={`stat-card glass-panel animate-fade-in delay-3 card-hover`} style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+        <div 
+          className={`stat-card glass-panel animate-fade-in delay-3 card-hover`} 
+          style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', cursor: 'pointer' }}
+          onClick={() => navigate('/results')}
+        >
           <div className="stat-body" style={{ flex: 1 }}>
             <div className="stat-header" style={{ marginBottom: '0.5rem' }}>
               <span className="stat-trend" style={{ color: 'var(--accent-primary)' }}>Top Subject</span>
             </div>
-            <h3 style={{ fontSize: '1.2rem', marginBottom: '4px' }}>Computer Science</h3>
-            <p>94% Average</p>
+            <h3 style={{ fontSize: '1.2rem', marginBottom: '4px' }}>{stats.topSubject}</h3>
+            <p>{stats.topAverage}% Average</p>
           </div>
           <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: '4px solid var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', fontWeight: 'bold' }}>
-            A+
+            {stats.topGrade}
           </div>
         </div>
       </section>
@@ -148,6 +226,9 @@ const StudentDashboard = () => {
           </div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', flex: 1 }}>
+            {recentTests.length === 0 && (
+              <p className="text-muted" style={{ textAlign: 'center', marginTop: '2rem' }}>No recent tests found.</p>
+            )}
             {recentTests.map((test) => (
               <div key={test.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '15px', borderBottom: '1px solid var(--border-glass)' }}>
                 <div>
@@ -155,7 +236,7 @@ const StudentDashboard = () => {
                   <span className="text-muted" style={{ fontSize: '0.85rem' }}>{test.date} • {test.id}</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
-                  <span style={{ fontWeight: 'bold' }}>{test.score}</span>
+                  <span style={{ fontWeight: 'bold' }}>{test.status === 'Evaluated' ? `${test.score}/${test.total}` : 'Pending'}</span>
                   <span className={`badge badge-status-${test.status.toLowerCase().replace(' ', '-')}`} style={{ padding: '2px 6px', fontSize: '0.7rem' }}>
                     {test.status}
                   </span>

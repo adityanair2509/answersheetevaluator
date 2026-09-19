@@ -1,11 +1,31 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, UploadCloud, FileCheck2, Settings, Download, LogOut, User, Info } from 'lucide-react';
 import './Sidebar.css';
 
 const Sidebar = () => {
   const [profileOpen, setProfileOpen] = useState(false);
+  const [isConnected, setIsConnected] = useState(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/health');
+        if (response.ok) {
+          setIsConnected(true);
+        } else {
+          setIsConnected(false);
+        }
+      } catch (e) {
+        setIsConnected(false);
+      }
+    };
+
+    checkConnection();
+    const interval = setInterval(checkConnection, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   const authData = localStorage.getItem('auth');
   let role = 'teacher';
@@ -53,6 +73,13 @@ const Sidebar = () => {
           </NavLink>
         ))}
       </nav>
+
+      <div className="connection-status">
+        <div className={`status-dot ${isConnected === true ? 'online' : isConnected === false ? 'offline' : 'pending'}`}></div>
+        <span className="status-text">
+          {isConnected === true ? 'Server Online' : isConnected === false ? 'Server Offline' : 'Connecting...'}
+        </span>
+      </div>
 
       <div className="sidebar-footer">
         <div className="profile-container">

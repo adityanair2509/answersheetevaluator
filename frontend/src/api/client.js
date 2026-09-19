@@ -10,6 +10,17 @@ export const apiClient = {
     return response.json();
   },
   
+  async delete(endpoint) {
+    const response = await fetch(`${BASE_URL}${endpoint}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      throw new Error(errText || `API DELETE request failed: ${response.statusText}`);
+    }
+    return response.json();
+  },
+  
   async post(endpoint, data) {
     const response = await fetch(`${BASE_URL}${endpoint}`, {
       method: 'POST',
@@ -33,12 +44,14 @@ export const apiClient = {
     if (!response.ok) {
       let errDetail = response.statusText;
       try {
-        const json = await response.json();
-        if (json.detail) errDetail = json.detail;
-      } catch (e) {
-        const text = await response.text().catch(() => '');
-        if (text) errDetail = text;
-      }
+        const text = await response.text();
+        try {
+          const json = JSON.parse(text);
+          if (json.detail) errDetail = json.detail;
+        } catch (_) {
+          if (text) errDetail = text;
+        }
+      } catch (e) { /* body unreadable, use statusText */ }
       throw new Error(errDetail);
     }
     return response.json();
@@ -54,11 +67,20 @@ export const AppApi = {
   getDashboardStats: () => apiClient.get('/exams/stats').catch(() => null),
   getRecentBatches: () => apiClient.get('/exams/recent').catch(() => []),
   uploadAnswerSheets: (formData) => apiClient.upload('/sheets/upload', formData),
-  getSheetReview: (sheetId) => apiClient.get(`/sheets/${sheetId}/review`),
-  approveScore: (sheetId, score, teacherId) => apiClient.post(`/sheets/${sheetId}/approve`, { score, teacher_id: teacherId }),
-  flagIssue: (sheetId, reason) => apiClient.post(`/sheets/${sheetId}/flag`, { reason }),
+  getSheetReview: (sheetId) => apiClient.get(`/sheets/${sheetId}/review`).catch(() => null),
+  approveScore: (sheetId, score, teacherId, questionNumber) => apiClient.post(`/sheets/${sheetId}/approve`, { score, teacher_id: teacherId, question_number: questionNumber }),
+  flagIssue: (sheetId, reason, questionNumber) => apiClient.post(`/sheets/${sheetId}/flag`, { reason, question_number: questionNumber }),
+
   getExamQuestions: (examId = 1) => apiClient.get(`/exams/${examId}/questions`).catch(() => []),
   addExamQuestion: (examId, data) => apiClient.post(`/exams/${examId}/questions`, data),
   getMyResults: () => apiClient.get('/exams/results').catch(() => []),
   createExam: (data) => apiClient.post('/exams', data),
+  uploadReferenceDocument: (examId, formData) => apiClient.upload(`/exams/${examId}/reference`, formData),
+  syncToLms: (examId, provider, courseId) => apiClient.post(`/exams/${examId}/lms-sync`, { provider, course_id: courseId }),
+  requestReevaluation: (sheetId, reason) => apiClient.post(`/sheets/${sheetId}/reevaluate`, { reason }),
+  getReevaluations: () => apiClient.get('/sheets/reevaluations').catch(() => []),
+  exportExamResults: (examId) => apiClient.get(`/exams/${examId}/export`),
+  getGradedSheets: (status = 'ALL') => apiClient.get(`/sheets/list?status=${status}`).catch(() => []),
+  getScoreAnalytics: () => apiClient.get('/exams/analytics').catch(() => null),
+  clearAllData: () => apiClient.delete('/exams/data/clear'),
 };

@@ -56,6 +56,7 @@ class ReviewStatus(StrEnum):
     REVIEWED = "reviewed"
     OVERRIDDEN = "overridden"
     SKIPPED = "skipped"
+    FLAGGED = "flagged"
 
 
 class ConfidenceBand(StrEnum):

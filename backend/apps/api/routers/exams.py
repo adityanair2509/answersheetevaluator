@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
@@ -9,8 +9,9 @@ import csv
 from fastapi.responses import StreamingResponse
 
 from db.session import get_db
-from db.models import Exam, AnswerSheet, Question, EvaluationResult, ExtractedAnswer
-from packages.common.enums import ExamStatus, SheetStatus, ReviewStatus
+from db.models import Exam, AnswerSheet, Question, EvaluationResult, ExtractedAnswer, AnswerKey
+from packages.common.enums import ExamStatus, SheetStatus, ReviewStatus, AnswerKeyStatus
+from packages.rag.chroma_service import chroma_service
 
 router = APIRouter(prefix="/api/v1/exams", tags=["Exams"])
 
@@ -28,18 +29,27 @@ class ExamCreateRequest(BaseModel):
     course_code: Optional[str] = None
 
 
+class LMSSyncRequest(BaseModel):
+    provider: str = Field(..., description="Canvas, Google Classroom, or Moodle")
+    course_id: str = Field(..., min_length=1)
+
+
 @router.get("/stats")
 async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
-    total_graded_query = select(func.count(AnswerSheet.id))
+    total_graded_query = (
+        select(func.count(AnswerSheet.id.distinct()))
+        .join(ExtractedAnswer, AnswerSheet.id == ExtractedAnswer.answer_sheet_id)
+        .join(EvaluationResult, ExtractedAnswer.id == EvaluationResult.extracted_answer_id)
+    )
     total_graded = (await db.execute(total_graded_query)).scalar() or 0
 
     auto_approved_query = select(func.count(EvaluationResult.id)).where(
-        EvaluationResult.review_status == ReviewStatus.AUTO_APPROVED
+        EvaluationResult.review_status.in_([ReviewStatus.AUTO_APPROVED, ReviewStatus.REVIEWED, ReviewStatus.OVERRIDDEN])
     )
     auto_approved = (await db.execute(auto_approved_query)).scalar() or 0
 
     needs_review_query = select(func.count(EvaluationResult.id)).where(
-        EvaluationResult.review_status == ReviewStatus.NEEDS_REVIEW
+        EvaluationResult.review_status.in_([ReviewStatus.NEEDS_REVIEW, ReviewStatus.FLAGGED])
     )
     needs_review = (await db.execute(needs_review_query)).scalar() or 0
 
@@ -159,6 +169,77 @@ async def add_exam_question(
     }
 
 
+@router.post("/{exam_id}/reference")
+async def upload_reference_document(
+    exam_id: int, 
+    file: UploadFile = File(...), 
+    db: AsyncSession = Depends(get_db)
+):
+    # Check if exam exists
+    query_exam = select(Exam).where(Exam.id == exam_id)
+    exam = (await db.execute(query_exam)).scalar_one_or_none()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+        
+    file_bytes = await file.read()
+    
+    # Save reference document entry in AnswerKey
+    query_ak = select(AnswerKey).where(AnswerKey.exam_id == exam_id)
+    existing_ak = (await db.execute(query_ak)).scalar_one_or_none()
+    
+    if existing_ak:
+        existing_ak.file_path = file.filename
+        existing_ak.status = AnswerKeyStatus.UPLOADED
+        ak_obj = existing_ak
+    else:
+        ak_obj = AnswerKey(
+            exam_id=exam_id,
+            file_path=file.filename,
+            status=AnswerKeyStatus.UPLOADED
+        )
+        db.add(ak_obj)
+        
+    await db.commit()
+    await db.refresh(ak_obj)
+    
+    # Index in ChromaDB
+    chunks_indexed = chroma_service.index_document(exam_id, file_bytes)
+    
+    return {
+        "message": f"Successfully indexed {chunks_indexed} chunks for {file.filename}",
+        "chunks_indexed": chunks_indexed
+    }
+
+
+
+@router.post("/{exam_id}/lms-sync")
+async def sync_to_lms(
+    exam_id: int,
+    req: LMSSyncRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    query = select(func.count(AnswerSheet.id)).where(
+        AnswerSheet.exam_id == exam_id,
+        AnswerSheet.status == SheetStatus.EVALUATED
+    )
+    evaluated_count = (await db.execute(query)).scalar() or 0
+    
+    # Simulate a network delay to mock LMS API call
+    import asyncio
+    await asyncio.sleep(1.5)
+    
+    if evaluated_count == 0:
+        return {
+            "message": f"No evaluated grades found for Exam {exam_id} to sync.",
+            "synced_count": 0
+        }
+        
+    return {
+        "message": f"Successfully synced {evaluated_count} grades to {req.provider} (Course ID: {req.course_id}).",
+        "synced_count": evaluated_count
+    }
+
+
 @router.get("/recent")
 async def get_recent_batches(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Exam).order_by(Exam.created_at.desc()).limit(5))
@@ -181,12 +262,83 @@ async def get_recent_batches(db: AsyncSession = Depends(get_db)):
     return batches
 
 
+@router.get("/analytics")
+async def get_exam_analytics(db: AsyncSession = Depends(get_db)):
+    """
+    Detailed score analytics across all evaluations.
+    """
+    # 1. Overall Stats
+    stats_query = (
+        select(
+            func.avg((EvaluationResult.score / EvaluationResult.max_score) * 100).label("avg"),
+            func.count(EvaluationResult.id).label("count"),
+            func.max(EvaluationResult.score).label("max"),
+            func.min(EvaluationResult.score).label("min"),
+        )
+    )
+    stats_res = (await db.execute(stats_query)).first()
+
+    # 2. Average by Exam
+    exam_avg_query = (
+        select(
+            Exam.title,
+            func.avg((EvaluationResult.score / EvaluationResult.max_score) * 100).label("avg")
+        )
+        .join(AnswerSheet, Exam.id == AnswerSheet.exam_id)
+        .join(ExtractedAnswer, AnswerSheet.id == ExtractedAnswer.answer_sheet_id)
+        .join(EvaluationResult, ExtractedAnswer.id == EvaluationResult.extracted_answer_id)
+        .group_by(Exam.id)
+    )
+    exam_res = (await db.execute(exam_avg_query)).all()
+
+    # 3. Detailed Table
+    detail_query = (
+        select(
+            AnswerSheet.student_roll,
+            Exam.title.label("exam_title"),
+            func.sum(EvaluationResult.score).label("total_score"),
+            func.sum(EvaluationResult.max_score).label("max_score"),
+            AnswerSheet.created_at,
+            AnswerSheet.status
+        )
+        .join(Exam, AnswerSheet.exam_id == Exam.id)
+        .join(ExtractedAnswer, AnswerSheet.id == ExtractedAnswer.answer_sheet_id)
+        .join(EvaluationResult, ExtractedAnswer.id == EvaluationResult.extracted_answer_id)
+        .group_by(AnswerSheet.id)
+        .order_by(AnswerSheet.created_at.desc())
+    )
+    detail_res = (await db.execute(detail_query)).all()
+
+    return {
+        "overall": {
+            "averageScore": round(float(stats_res.avg or 0), 1) if stats_res else 0,
+            "totalEvaluated": getattr(stats_res, "count", 0) if stats_res else 0,
+            "highestScore": getattr(stats_res, "max", 0) if stats_res else 0,
+            "lowestScore": getattr(stats_res, "min", 0) if stats_res else 0,
+        },
+        "byExam": [
+            {"exam": r.title, "avg": round(float(r.avg or 0), 1)}
+            for r in exam_res
+        ],
+        "details": [
+            {
+                "student": r.student_roll or "N/A",
+                "exam": r.exam_title,
+                "score": round(float(r.total_score or 0), 2),
+                "total": round(float(r.max_score or 10), 2),
+                "percentage": round((float(r.total_score or 0) / float(r.max_score or 10)) * 100, 1),
+                "date": r.created_at.isoformat(),
+                "status": r.status.name
+            }
+            for r in detail_res
+        ]
+    }
+
 @router.get("/results")
 async def get_my_results(db: AsyncSession = Depends(get_db)):
     query = (
         select(AnswerSheet)
         .options(selectinload(AnswerSheet.exam))
-        .where(AnswerSheet.status == SheetStatus.EVALUATED)
         .order_by(AnswerSheet.created_at.desc())
     )
     result = await db.execute(query)
@@ -194,19 +346,23 @@ async def get_my_results(db: AsyncSession = Depends(get_db)):
 
     results = []
     for sheet in sheets:
-        query_score = (
-            select(func.sum(EvaluationResult.score))
-            .join(ExtractedAnswer, EvaluationResult.extracted_answer_id == ExtractedAnswer.id)
-            .where(ExtractedAnswer.answer_sheet_id == sheet.id)
-        )
-        total_score = (await db.execute(query_score)).scalar() or 0.0
+        total_score = 0.0
+        max_score = 10.0
+        
+        if sheet.status == SheetStatus.EVALUATED:
+            query_score = (
+                select(func.sum(EvaluationResult.score))
+                .join(ExtractedAnswer, EvaluationResult.extracted_answer_id == ExtractedAnswer.id)
+                .where(ExtractedAnswer.answer_sheet_id == sheet.id)
+            )
+            total_score = (await db.execute(query_score)).scalar() or 0.0
 
-        query_max = (
-            select(func.sum(EvaluationResult.max_score))
-            .join(ExtractedAnswer, EvaluationResult.extracted_answer_id == ExtractedAnswer.id)
-            .where(ExtractedAnswer.answer_sheet_id == sheet.id)
-        )
-        max_score = (await db.execute(query_max)).scalar() or 10.0
+            query_max = (
+                select(func.sum(EvaluationResult.max_score))
+                .join(ExtractedAnswer, EvaluationResult.extracted_answer_id == ExtractedAnswer.id)
+                .where(ExtractedAnswer.answer_sheet_id == sheet.id)
+            )
+            max_score = (await db.execute(query_max)).scalar() or 10.0
 
         results.append({
             "id": f"T-{sheet.id:03d}",
@@ -214,8 +370,8 @@ async def get_my_results(db: AsyncSession = Depends(get_db)):
             "subject": sheet.exam.title if sheet.exam is not None else f"Exam {sheet.exam_id}",
             "studentRoll": sheet.student_roll or "N/A",
             "date": sheet.created_at.strftime("%b %d, %Y"),
-            "score": round(total_score, 1),
-            "total": round(max_score, 1),
+            "score": round(total_score, 1) if sheet.status == SheetStatus.EVALUATED else "Pending",
+            "total": round(max_score, 1) if sheet.status == SheetStatus.EVALUATED else "Pending",
             "status": sheet.status.name.replace("_", " ").title()
         })
     return results
@@ -248,3 +404,23 @@ async def export_exam_results(exam_id: int, db: AsyncSession = Depends(get_db)):
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=exam_{exam_id}_results.csv"}
     )
+
+@router.delete("/data/clear")
+async def clear_all_data(db: AsyncSession = Depends(get_db)):
+    """Clears all dynamic data (Exams, Sheets, etc) for a clean slate."""
+    from sqlalchemy import delete
+    from db.models import TeacherOverride, ConfidenceFlag, EvaluationResult, ExtractedAnswer, SheetPage, ProcessingJob, AnswerSheet, AnswerKeyChunk, AnswerKey, Question, Exam
+    
+    await db.execute(delete(TeacherOverride))
+    await db.execute(delete(ConfidenceFlag))
+    await db.execute(delete(EvaluationResult))
+    await db.execute(delete(ExtractedAnswer))
+    await db.execute(delete(SheetPage))
+    await db.execute(delete(ProcessingJob))
+    await db.execute(delete(AnswerSheet))
+    await db.execute(delete(AnswerKeyChunk))
+    await db.execute(delete(AnswerKey))
+    await db.execute(delete(Question))
+    await db.execute(delete(Exam))
+    await db.commit()
+    return {"message": "All evaluation data deleted successfully"}

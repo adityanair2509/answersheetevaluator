@@ -5,8 +5,12 @@ import { AppApi } from '../api/client';
 import ThemeToggle from '../components/ThemeToggle';
 import './Dashboard.css';
 
-const StatCard = ({ title, value, icon: Icon, colorClass, delay }) => (
-  <div className={`stat-card glass-panel animate-fade-in ${delay} card-hover`}>
+const StatCard = ({ title, value, icon: Icon, colorClass, delay, onClick }) => (
+  <div
+    className={`stat-card glass-panel animate-fade-in ${delay} card-hover`}
+    style={{ cursor: onClick ? 'pointer' : 'default' }}
+    onClick={onClick}
+  >
     <div className="stat-header">
       <div className={`stat-icon-wrapper ${colorClass}`}>
         <Icon size={24} />
@@ -65,10 +69,7 @@ const Dashboard = () => {
   const [maxMarks, setMaxMarks] = useState(10.0);
   const [rubricMessage, setRubricMessage] = useState(null);
 
-  const [reevalRequests, setReevalRequests] = useState([
-    { id: 'R-001', student: 'Arjun M.', subject: 'CS301 Mid-Term 2024', testId: 'T-001', reason: 'Q1 marked wrong but answer matches key', status: 'Pending', date: 'Oct 28, 2024' },
-    { id: 'R-002', student: 'Sonia K.', subject: 'Advanced Mathematics', testId: 'T-002', reason: 'Calculation step marks not given', status: 'Pending', date: 'Oct 29, 2024' }
-  ]);
+  const [reevalRequests, setReevalRequests] = useState([]);
 
   const loadData = () => {
     AppApi.getRecentBatches().then(data => {
@@ -81,6 +82,10 @@ const Dashboard = () => {
 
     AppApi.getExamQuestions(1).then(data => {
       if (Array.isArray(data)) setQuestions(data);
+    });
+
+    AppApi.getReevaluations().then(data => {
+      if (Array.isArray(data)) setReevalRequests(data);
     });
   };
 
@@ -137,11 +142,29 @@ const Dashboard = () => {
             <button className="icon-btn" onClick={() => setRubricModalOpen(false)}><X size={18} /></button>
           </div>
 
+          {/* Fallback Warning for Rubric Setup */}
+          <div style={{
+            backgroundColor: 'rgba(255, 165, 0, 0.1)',
+            border: '1px solid var(--warning-color)',
+            padding: '0.75rem',
+            borderRadius: '6px',
+            marginBottom: '1rem',
+            fontSize: '0.85rem',
+            color: 'var(--warning-color)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}>
+            <AlertCircle size={16} />
+            <span>Note: Without a configured Gemini API key, the system uses local fallback OCR.</span>
+          </div>
+
           {rubricMessage && (
             <div style={{ color: 'var(--success-color)', marginBottom: '1rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Check size={16} /> {rubricMessage}
             </div>
           )}
+
 
           <form onSubmit={handleSaveRubric} style={{ display: 'grid', gap: '1rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 3fr 1fr', gap: '1rem' }}>
@@ -231,11 +254,58 @@ const Dashboard = () => {
 
       {/* Database-Backed Metrics */}
       <section className="stats-grid">
-        <StatCard title="Total Graded Sheets" value={stats.totalGraded.toLocaleString()} icon={FileText} colorClass="icon-blue" delay="delay-1" />
-        <StatCard title="Auto-Approved" value={stats.autoApproved.toLocaleString()} icon={CheckCircle2} colorClass="icon-green" delay="delay-2" />
-        <StatCard title="Needs Review" value={stats.needsReview.toLocaleString()} icon={AlertCircle} colorClass="icon-orange" delay="delay-3" />
-        <PieChartCard title="Average Score" value={`${stats.averageScore}%`} percentage={stats.averageScore} delay="delay-3" onClick={() => setChartModalOpen(true)} />
+        <StatCard
+          title="Total Graded Sheets"
+          value={stats.totalGraded.toLocaleString()}
+          icon={FileText}
+          colorClass="icon-blue"
+          delay="delay-1"
+          onClick={() => navigate('/graded-sheets')}
+        />
+        <StatCard
+          title="Auto-Approved"
+          value={stats.autoApproved.toLocaleString()}
+          icon={CheckCircle2}
+          colorClass="icon-green"
+          delay="delay-2"
+          onClick={() => navigate('/graded-sheets', { state: { status: 'AUTO_APPROVED' } })}
+        />
+        <StatCard
+          title="Needs Review"
+          value={stats.needsReview.toLocaleString()}
+          icon={AlertCircle}
+          colorClass="icon-orange"
+          delay="delay-3"
+          onClick={() => navigate('/graded-sheets', { state: { status: 'NEEDS_REVIEW' } })}
+        />
+        <PieChartCard
+          title="Average Score"
+          value={`${stats.averageScore}%`}
+          percentage={stats.averageScore}
+          delay="delay-3"
+          onClick={() => navigate('/analytics')}
+        />
       </section>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem', paddingRight: '1rem' }} className="animate-fade-in delay-3">
+        <button 
+          className="btn-secondary" 
+          style={{ borderColor: 'var(--error-color)', color: 'var(--error-color)', backgroundColor: 'rgba(239, 68, 68, 0.1)' }}
+          onClick={async () => {
+            if (window.confirm("Are you sure you want to delete ALL data? This action cannot be undone.")) {
+              try {
+                await AppApi.clearAllData();
+                loadData();
+                alert("All evaluation data has been deleted successfully.");
+              } catch (err) {
+                alert("Failed to delete data: " + err.message);
+              }
+            }
+          }}
+        >
+          <X size={18} /> Delete All Data
+        </button>
+      </div>
 
       {/* Recent Activity Section */}
       <section className="recent-activity glass-panel animate-fade-in delay-3" style={{ marginTop: '2rem' }}>
