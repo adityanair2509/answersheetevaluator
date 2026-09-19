@@ -66,6 +66,7 @@ export const AppApi = {
   
   getDashboardStats: () => apiClient.get('/exams/stats').catch(() => null),
   getRecentBatches: () => apiClient.get('/exams/recent').catch(() => []),
+  getExams: () => apiClient.get('/exams').catch(() => []),
   uploadAnswerSheets: (formData) => apiClient.upload('/sheets/upload', formData),
   getSheetReview: (sheetId) => apiClient.get(`/sheets/${sheetId}/review`).catch(() => null),
   approveScore: (sheetId, score, teacherId, questionNumber) => apiClient.post(`/sheets/${sheetId}/approve`, { score, teacher_id: teacherId, question_number: questionNumber }),

@@ -17,10 +17,23 @@ const Upload = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [processedFileCount, setProcessedFileCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [availableExams, setAvailableExams] = useState([]);
 
   const navigate = useNavigate();
   const progressIntervalRef = useRef(null);
   const blobUrlsRef = useRef([]);
+
+  // Fetch available exams on load
+  useEffect(() => {
+    AppApi.getExams()
+      .then((data) => {
+        if (data && data.length > 0) {
+          setAvailableExams(data);
+          setExamId(data[0].id.toString());
+        }
+      })
+      .catch((err) => console.warn("Failed to load exams list:", err));
+  }, []);
 
   // Cleanup interval and blob URLs on unmount
   useEffect(() => {
@@ -156,12 +169,15 @@ const Upload = () => {
       blobUrlsRef.current = uploadedFileUrls;
       const uploadedFileTypes = files.map(f => f.type);
 
-      if (uploadedFileUrls.length > 0) {
-        sessionStorage.setItem('previewFileUrls', JSON.stringify(uploadedFileUrls));
-        sessionStorage.setItem('previewFileTypes', JSON.stringify(uploadedFileTypes));
-        // Fallback for old single-file components
-        sessionStorage.setItem('previewFileUrl', uploadedFileUrls[0]);
-        sessionStorage.setItem('previewFileType', uploadedFileTypes[0]);
+      // When uploading a batch of individual student sheets, Sheet 1 only consists of the first file!
+      const currentSheetUrls = isMultiPage ? uploadedFileUrls : [uploadedFileUrls[0]];
+      const currentSheetTypes = isMultiPage ? uploadedFileTypes : [uploadedFileTypes[0]];
+
+      if (currentSheetUrls.length > 0) {
+        sessionStorage.setItem('previewFileUrls', JSON.stringify(currentSheetUrls));
+        sessionStorage.setItem('previewFileTypes', JSON.stringify(currentSheetTypes));
+        sessionStorage.setItem('previewFileUrl', currentSheetUrls[0]);
+        sessionStorage.setItem('previewFileType', currentSheetTypes[0]);
       }
 
       if (!response || !response.sheet_ids || response.sheet_ids.length === 0) {
@@ -169,10 +185,9 @@ const Upload = () => {
       }
 
       const sheetId = response.sheet_ids[0];
-      const jobIds = response.job_ids || [];
 
-      if (evalData) {
-        sessionStorage.setItem('evaluationData', JSON.stringify(evalData));
+      if (response && response.job_ids) {
+        sessionStorage.setItem('evaluationData', JSON.stringify(response));
       }
 
       setUploading(false);
@@ -180,11 +195,11 @@ const Upload = () => {
       navigate(`/review?sheetId=${sheetId}`, { 
         state: { 
           sheetId, 
-          fileUrls: uploadedFileUrls,
-          fileTypes: uploadedFileTypes,
-          fileUrl: uploadedFileUrls.length > 0 ? uploadedFileUrls[0] : null, 
-          fileType: uploadedFileTypes.length > 0 ? uploadedFileTypes[0] : null,
-          evaluationData: evalData
+          fileUrls: currentSheetUrls,
+          fileTypes: currentSheetTypes,
+          fileUrl: currentSheetUrls[0] || null, 
+          fileType: currentSheetTypes[0] || null,
+          evaluationData: response
         } 
       });
     } catch (error) {
@@ -225,35 +240,57 @@ const Upload = () => {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
           <div>
-            <label style={{ display: 'block', marginBottom: '0.4rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Exam ID:</label>
-            <input 
-              type="number" 
-              min="1"
-              step="1"
-              value={examId} 
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val === '') {
-                  setExamId('');
-                } else {
-                  const num = parseInt(val, 10);
-                  setExamId(isNaN(num) || num < 1 ? '1' : num.toString());
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === '-' || e.key === 'e') {
-                  e.preventDefault();
-                }
-              }}
-              style={{
-                width: '100%',
-                padding: '0.6rem 0.8rem',
-                borderRadius: '6px',
-                border: '1px solid var(--border-color)',
-                background: 'var(--bg-primary)',
-                color: 'var(--text-primary)'
-              }}
-            />
+            <label style={{ display: 'block', marginBottom: '0.4rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Target Exam:</label>
+            {availableExams && availableExams.length > 0 ? (
+              <select
+                value={examId}
+                onChange={(e) => setExamId(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.6rem 0.8rem',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border-color)',
+                  background: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  cursor: 'pointer'
+                }}
+              >
+                {availableExams.map((ex) => (
+                  <option key={ex.id} value={ex.id.toString()}>
+                    {ex.title} ({ex.courseCode || `ID: ${ex.id}`}) - #{ex.id}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input 
+                type="number" 
+                min="1"
+                step="1"
+                value={examId} 
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '') {
+                    setExamId('');
+                  } else {
+                    const num = parseInt(val, 10);
+                    setExamId(isNaN(num) || num < 1 ? '1' : num.toString());
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === '-' || e.key === 'e') {
+                    e.preventDefault();
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  padding: '0.6rem 0.8rem',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border-color)',
+                  background: 'var(--bg-primary)',
+                  color: 'var(--text-primary)'
+                }}
+              />
+            )}
           </div>
 
           <div>

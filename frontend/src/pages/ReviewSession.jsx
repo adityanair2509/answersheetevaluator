@@ -23,15 +23,28 @@ const ReviewSession = () => {
     if (reviewData?.fileUrls && reviewData.fileUrls.length > 0) {
       return reviewData.fileUrls;
     }
-    return location.state?.fileUrls || (sessionStorage.getItem('previewFileUrls') ? JSON.parse(sessionStorage.getItem('previewFileUrls')) : [location.state?.fileUrl || sessionStorage.getItem('previewFileUrl')].filter(Boolean));
-  }, [location.state, reviewData]);
+    // Only use location.state.fileUrls if specifically matching this sheet
+    if (location.state?.sheetId && (!actualSheetId || location.state.sheetId === actualSheetId)) {
+      if (location.state.fileUrls && location.state.fileUrls.length > 0) {
+        return location.state.fileUrls;
+      }
+    }
+    const singleUrl = location.state?.fileUrl || sessionStorage.getItem('previewFileUrl');
+    return singleUrl ? [singleUrl] : [];
+  }, [location.state, reviewData, actualSheetId]);
 
   const fileTypes = useMemo(() => {
     if (reviewData?.fileTypes && reviewData.fileTypes.length > 0) {
       return reviewData.fileTypes;
     }
-    return location.state?.fileTypes || (sessionStorage.getItem('previewFileTypes') ? JSON.parse(sessionStorage.getItem('previewFileTypes')) : [location.state?.fileType || sessionStorage.getItem('previewFileType')].filter(Boolean));
-  }, [location.state, reviewData]);
+    if (location.state?.sheetId && (!actualSheetId || location.state.sheetId === actualSheetId)) {
+      if (location.state.fileTypes && location.state.fileTypes.length > 0) {
+        return location.state.fileTypes;
+      }
+    }
+    const singleType = location.state?.fileType || sessionStorage.getItem('previewFileType');
+    return singleType ? [singleType] : ['application/pdf'];
+  }, [location.state, reviewData, actualSheetId]);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -41,7 +54,7 @@ const ReviewSession = () => {
     setLoading(true);
     AppApi.getSheetReview(idToFetch)
       .then((data) => {
-        if (data && (data.evaluations && data.evaluations.length > 0 || data.studentRoll)) {
+        if (data && (data.evaluations && data.evaluations.length > 0 || data.studentRoll || data.sheetId)) {
           setReviewData(data);
 
           if (data.evaluations && data.evaluations.length > 0) {
@@ -61,6 +74,40 @@ const ReviewSession = () => {
       })
       .finally(() => setLoading(false));
   }, [location.search, location.state]);
+
+  // Auto-poll when AI evaluation is still running in background
+  useEffect(() => {
+    let pollTimer;
+    const isProcessing = reviewData && (
+      reviewData.jobStatus === 'RUNNING' || 
+      reviewData.jobStatus === 'PENDING' ||
+      (reviewData.status === 'UPLOADED' && (!reviewData.evaluations || reviewData.evaluations.length === 0))
+    );
+
+    if (isProcessing) {
+      pollTimer = setTimeout(() => {
+        const querySheetId = new URLSearchParams(location.search).get('sheetId');
+        const idToFetch = querySheetId || actualSheetId || location.state?.sheetId || 'next';
+        AppApi.getSheetReview(idToFetch)
+          .then((data) => {
+            if (data && (data.evaluations?.length > 0 || data.jobStatus !== reviewData.jobStatus)) {
+              setReviewData(data);
+              if (data.evaluations && data.evaluations.length > 0) {
+                const firstEval = data.evaluations[0];
+                setScore(firstEval.score !== undefined ? firstEval.score : 0);
+                setMaxScore(firstEval.maxScore || 10);
+                setReviewStatus(firstEval.reviewStatus || 'NEEDS_REVIEW');
+              }
+            }
+          })
+          .catch(() => {});
+      }, 3000);
+    }
+
+    return () => {
+      if (pollTimer) clearTimeout(pollTimer);
+    };
+  }, [reviewData, location.search, actualSheetId, location.state]);
 
   // Derived state for the currently selected question
   const currentEval = useMemo(() => {
@@ -209,6 +256,52 @@ const ReviewSession = () => {
         </div>
       )}
 
+      {/* Evaluation in progress banner */}
+      {(reviewData?.jobStatus === 'RUNNING' || reviewData?.jobStatus === 'PENDING' || (reviewData && (!reviewData.evaluations || reviewData.evaluations.length === 0) && reviewData.status === 'UPLOADED')) && (
+        <div className="glass-panel animate-fade-in" style={{
+          backgroundColor: 'rgba(99, 102, 241, 0.12)',
+          border: '1px solid var(--accent-primary)',
+          color: 'var(--text-primary)',
+          padding: '1rem 1.25rem',
+          borderRadius: '8px',
+          marginBottom: '1rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '1rem'
+        }}>
+          <Loader2 className="animate-spin text-accent" size={24} />
+          <div>
+            <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>AI Evaluation in Progress</div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              Analyzing handwritten answer sheet and evaluating against rubric. Results will appear automatically in a few seconds...
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Evaluation failed banner */}
+      {reviewData?.jobStatus === 'FAILED' && (
+        <div className="glass-panel animate-fade-in" style={{
+          backgroundColor: 'rgba(239, 68, 68, 0.12)',
+          border: '1px solid var(--error-color)',
+          color: 'var(--text-primary)',
+          padding: '1rem 1.25rem',
+          borderRadius: '8px',
+          marginBottom: '1rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '1rem'
+        }}>
+          <AlertCircle className="text-danger" size={24} />
+          <div>
+            <div style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--error-color)' }}>AI Evaluation Incomplete</div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              {reviewData.jobError ? `Details: ${reviewData.jobError}. ` : ''}You can preview the scanned document on the left and assign a score manually.
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="review-workspace">
         {/* Left Pane - Image Viewer */}
         <div className="workspace-pane image-pane glass-panel">
@@ -228,7 +321,7 @@ const ReviewSession = () => {
                 fileUrls.map((url, idx) => {
                   const fullUrl = getFullFileUrl(url);
                   return (
-                  <div key={idx} className="mock-document" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <div key={idx} className="document-preview-card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                     {fileTypes[idx] === 'application/pdf' ? (
                       <div style={{ width: '100%', height: '100%', minHeight: '600px', position: 'relative' }}>
                         <iframe

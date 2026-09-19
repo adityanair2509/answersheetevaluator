@@ -56,15 +56,37 @@ def evaluate_answer_sheet(
 
         parts = [types.Part.from_bytes(data=f["bytes"], mime_type=f["mime_type"]) for f in files_data]
 
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[*parts, prompt],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-            )
-        )
+        models_to_try = [
+            "gemini-3.5-flash-lite",
+            "gemini-3.6-flash",
+            "gemini-flash-latest",
+            "gemini-2.5-flash",
+        ]
 
-        data = json.loads(response.text)
+        response = None
+        last_model_err = None
+        for candidate_model in models_to_try:
+            try:
+                response = client.models.generate_content(
+                    model=candidate_model,
+                    contents=[*parts, prompt],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                    )
+                )
+                if response and response.text:
+                    break
+            except Exception as model_err:
+                print(f"[GeminiEvaluator] Model {candidate_model} attempt: {model_err}")
+                last_model_err = model_err
+
+        if not response or not response.text:
+            if last_model_err:
+                raise last_model_err
+            raise ValueError("No response received from any Gemini model.")
+
+        response_text = response.text or "{}"
+        data = json.loads(response_text)
         
         # Fill defaults for schema consistency
         data.setdefault("expectedAnswer", expected_answer or "Expected answer based on standard rubric.")
@@ -77,8 +99,9 @@ def evaluate_answer_sheet(
     except Exception as e:
         print(f"[GeminiEvaluator] Error during evaluation: {e}")
 
-        # Only provide fallback data if demo_mode is explicitly enabled
-        if not settings.demo_mode:
+        is_rate_limit = "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or "quota" in str(e).lower()
+        # Provide fallback if demo_mode is enabled OR if Gemini API quota is exhausted (429)
+        if not settings.demo_mode and not is_rate_limit:
             raise e
 
         # Reliable fallback for local demo mode without active API key

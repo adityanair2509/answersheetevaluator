@@ -128,7 +128,24 @@
   padding: 2rem;
 }
 
-/* Mock Document Styles */
+/* Real Document Preview Frame */
+.document-preview-card {
+  background-color: #ffffff;
+  width: 100%;
+  max-width: 800px;
+  min-height: 500px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Mock Document Styles (Only used when no document file is uploaded) */
 .mock-document {
   background-color: #fdfdfc;
   color: #111111;

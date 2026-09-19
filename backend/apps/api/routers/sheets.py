@@ -15,111 +15,120 @@ from packages.common.config import get_settings
 settings = get_settings()
 from packages.ocr.gemini_evaluator import evaluate_answer_sheet
 from packages.rag.chroma_service import chroma_service
+import re
+
+_eval_semaphore = asyncio.Semaphore(2)
 
 async def process_answer_sheet_task(sheet_id: int, exam_id: int):
     """
     Background task to evaluate an answer sheet.
     Handles OCR, LLM evaluation, and DB persistence.
+    Throttled by _eval_semaphore to avoid exhausting LLM quotas and locking SQLite.
     """
-    async with AsyncSessionLocal() as db:
-        try:
-            # 1. Create/Update Processing Job
-            job = ProcessingJob(
-                answer_sheet_id=sheet_id,
-                status=JobStatus.RUNNING,
-                stage="evaluating"
-            )
-            db.add(job)
-            await db.flush()
-            job_id = job.id
-
-            # 2. Prepare files_data for evaluator
-            # Retrieve all pages for this sheet
-            page_query = select(SheetPage).where(SheetPage.answer_sheet_id == sheet_id).order_by(SheetPage.page_number)
-            page_result = await db.execute(page_query)
-            pages = page_result.scalars().all()
-
-            files_data = []
-            for p in pages:
-                if p.file_path:
-                    file_path = Path(p.file_path)
-                    if file_path.exists():
-                        # Determine mime type based on extension
-                        ext = file_path.suffix.lower()
-                        mime = "application/pdf" if ext == ".pdf" else "image/jpeg" if ext in [".jpg", ".jpeg"] else "image/png" if ext == ".png" else "application/octet-stream"
-                        files_data.append({"bytes": file_path.read_bytes(), "mime_type": mime})
-
-            if not files_data:
-                raise ValueError("No valid files found for this answer sheet.")
-
-            # 3. Evaluate against ALL questions in the exam
-            q_query = select(Question).where(Question.exam_id == exam_id).order_by(Question.question_number)
-            q_result = await db.execute(q_query)
-            questions = q_result.scalars().all()
-
-            for q in questions:
-                # Retrieve RAG context
-                reference_context = chroma_service.retrieve_context(exam_id, q.question_text) if q.question_text else None
-
-                # Run synchronous AI evaluation in a separate thread to avoid blocking event loop
-                evaluation = await asyncio.to_thread(
-                    evaluate_answer_sheet,
-                    files_data=files_data,
-                    question_text=q.question_text,
-                    expected_answer=q.expected_answer,
-                    max_marks=q.max_marks,
-                    reference_context=reference_context
-                )
-
-                # Persist ExtractedAnswer
-                ai_conf = evaluation.get("aiConfidence", 78)
-                conf_float = float(ai_conf) / 100.0 if ai_conf > 1 else float(ai_conf)
-
-                extracted = ExtractedAnswer(
+    async with _eval_semaphore:
+        async with AsyncSessionLocal() as db:
+            try:
+                # 1. Create/Update Processing Job
+                job = ProcessingJob(
                     answer_sheet_id=sheet_id,
-                    question_number=q.question_number,
-                    raw_text=evaluation.get("studentAnswer", ""),
-                    confidence=conf_float
+                    status=JobStatus.RUNNING,
+                    stage="evaluating"
                 )
-                db.add(extracted)
-                await db.flush()
+                db.add(job)
+                await db.commit()
+                job_id = job.id
 
-                # Persist EvaluationResult
-                eval_status_str = evaluation.get("reviewStatus", "NEEDS_REVIEW")
-                review_status = ReviewStatus.AUTO_APPROVED if (eval_status_str == "AUTO_APPROVED" and conf_float >= 0.85) else ReviewStatus.NEEDS_REVIEW
+                # 2. Prepare files_data for evaluator
+                # Retrieve all pages for this sheet
+                page_query = select(SheetPage).where(SheetPage.answer_sheet_id == sheet_id).order_by(SheetPage.page_number)
+                page_result = await db.execute(page_query)
+                pages = page_result.scalars().all()
 
-                eval_res = EvaluationResult(
-                    extracted_answer_id=extracted.id,
-                    score=float(evaluation.get("score", q.max_marks)),
-                    max_score=float(evaluation.get("maxScore", q.max_marks)),
-                    reasoning=evaluation.get("llmRationale", evaluation.get("reasoning", "")),
-                    confidence=conf_float,
-                    confidence_band=ConfidenceBand.HIGH if conf_float >= 0.85 else ConfidenceBand.MEDIUM,
-                    review_status=review_status
-                )
-                db.add(eval_res)
+                files_data = []
+                for p in pages:
+                    if p.file_path:
+                        file_path = Path(p.file_path)
+                        if file_path.exists():
+                            # Determine mime type based on extension
+                            ext = file_path.suffix.lower()
+                            mime = "application/pdf" if ext == ".pdf" else "image/jpeg" if ext in [".jpg", ".jpeg"] else "image/png" if ext == ".png" else "application/octet-stream"
+                            files_data.append({"bytes": file_path.read_bytes(), "mime_type": mime})
 
-            # 4. Finalize sheet and job status
-            sheet_query = select(AnswerSheet).where(AnswerSheet.id == sheet_id)
-            sheet = (await db.execute(sheet_query)).scalar_one_or_none()
-            if sheet:
-                sheet.status = SheetStatus.EVALUATED
+                if not files_data:
+                    raise ValueError("No valid files found for this answer sheet.")
 
-            job.status = JobStatus.COMPLETED
-            await db.commit()
+                # 3. Evaluate against ALL questions in the exam
+                q_query = select(Question).where(Question.exam_id == exam_id).order_by(Question.question_number)
+                q_result = await db.execute(q_query)
+                questions = q_result.scalars().all()
 
-        except Exception as e:
-            # Log error and update job status
-            print(f"[BackgroundEval] Error processing sheet {sheet_id}: {e}")
-            async with AsyncSessionLocal() as err_db:
-                # We need a new session to update the job status if the original one failed/rolled back
-                job_query = select(ProcessingJob).where(ProcessingJob.answer_sheet_id == sheet_id).order_by(ProcessingJob.created_at.desc()).limit(1)
-                job_res = await err_db.execute(job_query)
-                job = job_res.scalar_one_or_none()
-                if job:
-                    job.status = JobStatus.FAILED
-                    job.error_message = str(e)
-                    await err_db.commit()
+                for q in questions:
+                    # Retrieve RAG context
+                    reference_context = chroma_service.retrieve_context(exam_id, q.question_text) if q.question_text else None
+
+                    # Release any open transactions before blocking
+                    await db.commit()
+
+                    # Run synchronous AI evaluation in a separate thread to avoid blocking event loop
+                    evaluation = await asyncio.to_thread(
+                        evaluate_answer_sheet,
+                        files_data=files_data,
+                        question_text=q.question_text,
+                        expected_answer=q.expected_answer,
+                        max_marks=q.max_marks,
+                        reference_context=reference_context
+                    )
+
+                    # Persist ExtractedAnswer
+                    ai_conf = evaluation.get("aiConfidence", 78)
+                    conf_float = float(ai_conf) / 100.0 if ai_conf > 1 else float(ai_conf)
+
+                    extracted = ExtractedAnswer(
+                        answer_sheet_id=sheet_id,
+                        question_number=q.question_number,
+                        raw_text=evaluation.get("studentAnswer", ""),
+                        confidence=conf_float
+                    )
+                    db.add(extracted)
+                    await db.commit()
+
+                    # Persist EvaluationResult
+                    eval_status_str = evaluation.get("reviewStatus", "NEEDS_REVIEW")
+                    review_status = ReviewStatus.AUTO_APPROVED if (eval_status_str == "AUTO_APPROVED" and conf_float >= 0.85) else ReviewStatus.NEEDS_REVIEW
+
+                    eval_res = EvaluationResult(
+                        extracted_answer_id=extracted.id,
+                        score=float(evaluation.get("score", q.max_marks)),
+                        max_score=float(evaluation.get("maxScore", q.max_marks)),
+                        reasoning=evaluation.get("llmRationale", evaluation.get("reasoning", "")),
+                        confidence=conf_float,
+                        confidence_band=ConfidenceBand.HIGH if conf_float >= 0.85 else ConfidenceBand.MEDIUM,
+                        review_status=review_status
+                    )
+                    db.add(eval_res)
+                    await db.commit()
+
+                # 4. Finalize sheet and job status
+                sheet_query = select(AnswerSheet).where(AnswerSheet.id == sheet_id)
+                sheet = (await db.execute(sheet_query)).scalar_one_or_none()
+                if sheet:
+                    sheet.status = SheetStatus.EVALUATED
+
+                job.status = JobStatus.COMPLETED
+                await db.commit()
+
+            except Exception as e:
+                # Log error and update job status
+                print(f"[BackgroundEval] Error processing sheet {sheet_id}: {e}")
+                async with AsyncSessionLocal() as err_db:
+                    # We need a new session to update the job status if the original one failed/rolled back
+                    job_query = select(ProcessingJob).where(ProcessingJob.answer_sheet_id == sheet_id).order_by(ProcessingJob.created_at.desc()).limit(1)
+                    job_res = await err_db.execute(job_query)
+                    job = job_res.scalar_one_or_none()
+                    if job:
+                        job.status = JobStatus.FAILED
+                        job.error_message = str(e)
+                        await err_db.commit()
 
 router = APIRouter(prefix="/api/v1/sheets", tags=["Sheets"])
 
@@ -157,6 +166,14 @@ async def upload_answer_sheets(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No files provided for upload."
+        )
+
+    # Validate exam existence
+    exam = await db.get(Exam, exam_id)
+    if not exam:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Exam with ID {exam_id} not found. Please verify the exam exists before uploading answer sheets."
         )
 
     # Validate file formats
@@ -209,7 +226,8 @@ async def upload_answer_sheets(
         sheet_dir = settings.upload_dir / f"sheet_{sheet.id}"
         sheet_dir.mkdir(parents=True, exist_ok=True)
         for idx, rf in enumerate(raw_files):
-            safe_name = Path(rf["filename"]).name.replace(" ", "_") # type: ignore
+            raw_name = Path(rf["filename"]).name # type: ignore
+            safe_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', raw_name)
             dest_file = sheet_dir / f"page_{idx + 1}_{safe_name}"
             with open(dest_file, "wb") as f_out:
                 f_out.write(rf["bytes"]) # type: ignore
@@ -258,7 +276,8 @@ async def upload_answer_sheets(
             # Persist physical file and create SheetPage record
             sheet_dir = settings.upload_dir / f"sheet_{sheet.id}"
             sheet_dir.mkdir(parents=True, exist_ok=True)
-            safe_name = Path(filename).name.replace(" ", "_")
+            raw_name = Path(filename).name
+            safe_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', raw_name)
             dest_file = sheet_dir / f"page_1_{safe_name}"
             with open(dest_file, "wb") as f_out:
                 f_out.write(contents)
@@ -541,6 +560,10 @@ async def get_sheet_review(sheet_id: str, db: AsyncSession = Depends(get_db)):
         ext = ("." + sheet.original_filename.split(".")[-1]).lower() if sheet.original_filename and "." in sheet.original_filename else ".pdf"
         file_types = ["application/pdf" if ext == ".pdf" else "image/jpeg"]
 
+    job_query = select(ProcessingJob).where(ProcessingJob.answer_sheet_id == sheet.id).order_by(ProcessingJob.created_at.desc()).limit(1)
+    job_res = await db.execute(job_query)
+    job = job_res.scalar_one_or_none()
+
     return {
         "sheetId": sheet.id,
         "examId": sheet.exam_id,
@@ -548,6 +571,10 @@ async def get_sheet_review(sheet_id: str, db: AsyncSession = Depends(get_db)):
         "studentRoll": sheet.student_roll or "N/A",
         "fileName": sheet.original_filename,
         "evaluations": extracted_answers_data,
+        "status": sheet.status.name,
+        "jobStatus": job.status.name if job else "COMPLETED",
+        "jobStage": job.stage if job else None,
+        "jobError": job.error_message if job else None,
         "fileUrls": file_urls,
         "fileTypes": file_types,
         "fileUrl": file_urls[0] if file_urls else None,

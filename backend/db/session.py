@@ -25,10 +25,12 @@ from packages.common.config import get_settings
 # Use connect_args for SQLite WAL mode (better concurrency under FastAPI).
 # ---------------------------------------------------------------------------
 
+from sqlalchemy import event
+
 _settings = get_settings()
 
 _connect_args = (
-    {"check_same_thread": False, "timeout": 15.0}
+    {"check_same_thread": False, "timeout": 60.0}
     if _settings.database_url.startswith("sqlite")
     else {}
 )
@@ -39,6 +41,16 @@ engine = create_async_engine(
     future=True,
     connect_args=_connect_args,
 )
+
+if _settings.database_url.startswith("sqlite"):
+    @event.listens_for(engine.sync_engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=60000")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
+
 
 # ---------------------------------------------------------------------------
 # Session factory — expire_on_commit=False keeps objects usable after commit
